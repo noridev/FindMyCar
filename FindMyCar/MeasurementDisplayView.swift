@@ -177,6 +177,7 @@ struct MeasurementCard: View {
 
 struct DirectionCompassView: View {
     let direction: simd_float3?
+    @State private var previousAngle: Double = 0
     
     var body: some View {
         VStack(spacing: 12) {
@@ -222,8 +223,8 @@ struct DirectionCompassView: View {
                         .fill(Color.red)
                         .frame(width: 8, height: 40)
                         .offset(y: -35)
-                        .rotationEffect(.degrees(angleFromDirection(direction)))
-                        .animation(.easeInOut(duration: 0.3), value: direction)
+                        .rotationEffect(.degrees(smoothAngleFromDirection(direction)))
+                        .animation(.easeInOut(duration: 0.3), value: smoothAngleFromDirection(direction))
                 }
                 
                 // Center Dot
@@ -237,13 +238,36 @@ struct DirectionCompassView: View {
         .cornerRadius(16)
     }
     
-    private func angleFromDirection(_ direction: simd_float3) -> Double {
+    private func smoothAngleFromDirection(_ direction: simd_float3) -> Double {
         let x = Double(direction.x)
         let z = Double(direction.z)
         
         // Calculate angle from forward direction (negative z-axis)
-        let angle = atan2(x, -z) * 180 / Double.pi
-        return angle < 0 ? angle + 360 : angle
+        let rawAngle = atan2(x, -z) * 180 / Double.pi
+        let normalizedAngle = rawAngle < 0 ? rawAngle + 360 : rawAngle
+        
+        // Handle 0/360 degree boundary to prevent full rotation
+        let angleDifference = normalizedAngle - previousAngle
+        
+        var smoothedAngle: Double
+        if abs(angleDifference) > 180 {
+            // We're crossing the 0/360 boundary
+            if angleDifference > 0 {
+                // Going from ~360 to ~0, subtract 360 from new angle
+                smoothedAngle = normalizedAngle - 360
+            } else {
+                // Going from ~0 to ~360, add 360 to new angle  
+                smoothedAngle = normalizedAngle + 360
+            }
+        } else {
+            smoothedAngle = normalizedAngle
+        }
+        
+        DispatchQueue.main.async {
+            self.previousAngle = smoothedAngle
+        }
+        
+        return smoothedAngle
     }
 }
 
