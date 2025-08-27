@@ -1,0 +1,8 @@
+# Claude code
+/.claude/
+
+# IntelliJ
+/.idea/
+
+# Qorvo Nearby Interaction Example code
+/Qorvo_Nearby_Interaction_v1.3.5/

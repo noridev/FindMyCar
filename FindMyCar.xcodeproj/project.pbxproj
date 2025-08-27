@@ -6,13 +6,33 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F10CB0062E5EA554001AD39C /* CoreBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10CB0052E5EA554001AD39C /* CoreBluetooth.framework */; };
+		F10CB0082E5EA557001AD39C /* NearbyInteraction.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F10CB0072E5EA557001AD39C /* NearbyInteraction.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		F10CB0052E5EA554001AD39C /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
+		F10CB0072E5EA557001AD39C /* NearbyInteraction.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NearbyInteraction.framework; path = System/Library/Frameworks/NearbyInteraction.framework; sourceTree = SDKROOT; };
 		F1B936BF2E5BF2AF00BCB0FD /* FindMyCar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FindMyCar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F10CB0032E5EA53B001AD39C /* Exceptions for "FindMyCar" folder in "FindMyCar" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = F1B936BE2E5BF2AF00BCB0FD /* FindMyCar */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		F1B936C12E5BF2AF00BCB0FD /* FindMyCar */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F10CB0032E5EA53B001AD39C /* Exceptions for "FindMyCar" folder in "FindMyCar" target */,
+			);
 			path = FindMyCar;
 			sourceTree = "<group>";
 		};
@@ -23,16 +43,28 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F10CB0082E5EA557001AD39C /* NearbyInteraction.framework in Frameworks */,
+				F10CB0062E5EA554001AD39C /* CoreBluetooth.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		F10CB0042E5EA554001AD39C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F10CB0072E5EA557001AD39C /* NearbyInteraction.framework */,
+				F10CB0052E5EA554001AD39C /* CoreBluetooth.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		F1B936B62E5BF2AF00BCB0FD = {
 			isa = PBXGroup;
 			children = (
 				F1B936C12E5BF2AF00BCB0FD /* FindMyCar */,
+				F10CB0042E5EA554001AD39C /* Frameworks */,
 				F1B936C02E5BF2AF00BCB0FD /* Products */,
 			);
 			sourceTree = "<group>";
@@ -256,6 +288,12 @@
 				DEVELOPMENT_TEAM = C8JYC8C6SM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FindMyCar/Info.plist;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app uses Bluetooth to connect to UWB devices and exchange Nearby Interaction configuration data.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "This app uses Bluetooth to connect to UWB devices for precise location tracking.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to improve UWB positioning accuracy. No images are captured or stored.";
+				INFOPLIST_KEY_NSNearbyInteractionAllowOnceUsageDescription = "This app uses Nearby Interaction to provide precise location tracking of your car using UWB technology.";
+				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "This app uses Nearby Interaction to locate your car with centimeter-level precision using UWB technology.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -288,6 +326,12 @@
 				DEVELOPMENT_TEAM = C8JYC8C6SM;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FindMyCar/Info.plist;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app uses Bluetooth to connect to UWB devices and exchange Nearby Interaction configuration data.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "This app uses Bluetooth to connect to UWB devices for precise location tracking.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to improve UWB positioning accuracy. No images are captured or stored.";
+				INFOPLIST_KEY_NSNearbyInteractionAllowOnceUsageDescription = "This app uses Nearby Interaction to provide precise location tracking of your car using UWB technology.";
+				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "This app uses Nearby Interaction to locate your car with centimeter-level precision using UWB technology.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
