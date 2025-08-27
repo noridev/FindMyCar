@@ -8,11 +8,8 @@ struct FindMyCarMapView: View {
     @StateObject private var locationManager = LocationManager()
     
     @State private var cameraPosition: MapCameraPosition = .automatic
-    @State private var sheetHeight: CGFloat = 300
+    @State private var showingDeviceList = false
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
-    
-    private let minSheetHeight: CGFloat = 120
-    private let maxSheetHeight: CGFloat = 600
     
     init() {
         let bluetoothManager = BluetoothManager()
@@ -72,14 +69,19 @@ struct FindMyCarMapView: View {
                 }
                 
                 Spacer()
-                
-                DeviceListSheet(
+            }
+            .sheet(isPresented: $showingDeviceList) {
+                DeviceListSheetView(
                     bluetoothManager: bluetoothManager,
-                    nearbyInteractionManager: nearbyInteractionManager,
-                    height: $sheetHeight,
-                    minHeight: minSheetHeight,
-                    maxHeight: maxSheetHeight
+                    nearbyInteractionManager: nearbyInteractionManager
                 )
+                .presentationDetents([.height(300), .height(500), .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackgroundInteraction(.enabled)
+                .interactiveDismissDisabled()
+            }
+            .onAppear {
+                showingDeviceList = true
             }
         }
         .ignoresSafeArea(.all, edges: .bottom)
@@ -97,6 +99,184 @@ struct FindMyCarMapView: View {
                 coordinate: savedLocation,
                 device: device
             )
+        }
+    }
+}
+
+struct DeviceListSheetView: View {
+    @ObservedObject var bluetoothManager: BluetoothManager
+    @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 16) {
+                    headerSection
+                    
+                    if bluetoothManager.discoveredDevices.isEmpty {
+                        noDevicesView
+                    } else {
+                        deviceListSection
+                    }
+                    
+                    controlsSection
+                }
+                .padding()
+            }
+            .navigationTitle("Find My Car")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+    
+    private var headerSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("UWB 디바이스")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                    
+                    Text("디바이스 연결 및 추적")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                connectionStatusIndicator
+            }
+            
+            if nearbyInteractionManager.isSessionActive {
+                activeSessionCard
+            }
+        }
+    }
+    
+    private var connectionStatusIndicator: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(bluetoothStatusColor)
+                .frame(width: 12, height: 12)
+            
+            if nearbyInteractionManager.isSessionActive {
+                Circle()
+                    .fill(Color.purple)
+                    .frame(width: 12, height: 12)
+            }
+        }
+    }
+    
+    private var bluetoothStatusColor: Color {
+        switch bluetoothManager.connectionStatus {
+        case .connected:
+            return .green
+        case .connecting, .scanning:
+            return .orange
+        case .failed:
+            return .red
+        default:
+            return .gray
+        }
+    }
+    
+    private var activeSessionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "location.circle.fill")
+                    .foregroundColor(.purple)
+                Text("활성 추적")
+                    .font(.headline)
+                    .fontWeight(.medium)
+                Spacer()
+            }
+            
+            if let distance = nearbyInteractionManager.distance {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("거리")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text("\(String(format: "%.2f", distance))m")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                    }
+                    
+                    Spacer()
+                    
+                    if let direction = nearbyInteractionManager.direction {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("방향")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            DirectionIndicator(direction: direction)
+                        }
+                    }
+                }
+            } else {
+                Text("위치 정보를 받고 있습니다...")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color.purple.opacity(0.1))
+        .cornerRadius(12)
+    }
+    
+    private var noDevicesView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                .font(.system(size: 40))
+                .foregroundColor(.secondary)
+            
+            Text("디바이스가 발견되지 않았습니다")
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            
+            Text("Bluetooth를 켜고 스캔을 시작해주세요")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.vertical, 40)
+    }
+    
+    private var deviceListSection: some View {
+        LazyVStack(spacing: 12) {
+            ForEach(bluetoothManager.discoveredDevices, id: \.bleUniqueID) { device in
+                DeviceCard(
+                    device: device,
+                    bluetoothManager: bluetoothManager,
+                    nearbyInteractionManager: nearbyInteractionManager
+                )
+            }
+        }
+    }
+    
+    private var controlsSection: some View {
+        VStack(spacing: 12) {
+            Button(action: {
+                if bluetoothManager.isScanning {
+                    bluetoothManager.stopScanning()
+                } else {
+                    bluetoothManager.startScanning()
+                }
+            }) {
+                HStack {
+                    if bluetoothManager.isScanning {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "magnifyingglass")
+                    }
+                    Text(bluetoothManager.isScanning ? "스캔 중지" : "디바이스 스캔")
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
         }
     }
 }

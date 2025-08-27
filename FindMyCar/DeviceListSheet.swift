@@ -351,8 +351,9 @@ struct DirectionIndicator: View {
     let direction: simd_float3
     
     var body: some View {
-        // 방향을 180도 회전시켜 올바른 방향을 표시
-        let angle = atan2(-direction.x, -direction.z) * 180 / .pi
+        // UWB 방향 벡터를 화면 좌표계에 맞게 변환
+        // direction.x: 오른쪽이 양수, direction.z: 뒤쪽이 양수일 수 있음
+        let angle = atan2(direction.x, -direction.z) * 180 / .pi
         
         Image(systemName: "arrow.up.circle.fill")
             .font(.system(size: 16))
