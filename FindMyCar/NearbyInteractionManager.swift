@@ -4,6 +4,7 @@ import Combine
 import simd
 import os.log
 import CoreBluetooth
+import CoreLocation
 
 class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDelegate {
     private let logger = Logger(subsystem: "com.findmycar.app", category: "NearbyInteractionManager")
@@ -19,6 +20,7 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
     private var niSessions: [Int: NISession] = [:]
     private var configurations: [Int: NINearbyAccessoryConfiguration] = [:]
     private var selectedDeviceID: Int = -1
+    private let locationManager = CLLocationManager()
     
     enum SessionStatus: Equatable {
         case idle
@@ -186,7 +188,7 @@ extension NearbyInteractionManager: NISessionDelegate {
             self.lastUpdate = Date()
         }
         
-        // Update device location in bluetooth manager
+        // Update device location in bluetooth manager and save location
         if let deviceIndex = bluetoothManager.discoveredDevices.firstIndex(where: { 
             niSessions[$0.bleUniqueID] === session 
         }) {
@@ -195,6 +197,11 @@ extension NearbyInteractionManager: NISessionDelegate {
             device.uwbLocation?.direction = nearbyObject.direction ?? SIMD3<Float>(0, 0, 0)
             device.uwbLocation?.elevation = nearbyObject.verticalDirectionEstimate.rawValue
             device.uwbLocation?.noUpdate = false
+            
+            // Save current location when device is being tracked
+            if let currentLocation = locationManager.location?.coordinate {
+                LocationStorage.shared.saveLocation(deviceID: device.bleUniqueID, coordinate: currentLocation)
+            }
         }
         
         logger.debug("Updated location - Distance: \(nearbyObject.distance?.description ?? "nil"), Direction: \(nearbyObject.direction?.debugDescription ?? "nil")")

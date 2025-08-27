@@ -7,5 +7,11 @@
 		<string>bluetooth-central</string>
 		<string>nearby-interaction</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>이 앱은 차량의 위치를 저장하고 지도에 표시하기 위해 위치 권한이 필요합니다.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>UWB 디바이스와 연결하기 위해 Bluetooth 권한이 필요합니다.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>UWB 디바이스와 연결하기 위해 Bluetooth 권한이 필요합니다.</string>
 </dict>
 </plist>

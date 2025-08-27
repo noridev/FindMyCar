@@ -11,7 +11,7 @@ import SwiftUI
 struct FindMyCarApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            FindMyCarMapView()
         }
     }
 }
