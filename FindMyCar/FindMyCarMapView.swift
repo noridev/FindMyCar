@@ -9,6 +9,8 @@ struct FindMyCarMapView: View {
     
     @State private var cameraPosition: MapCameraPosition = .automatic
     @State private var showingDeviceList = false
+    @State private var isScanning = false
+    @State private var scanTimer: Timer?
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
     
     init() {
@@ -73,7 +75,10 @@ struct FindMyCarMapView: View {
             .sheet(isPresented: $showingDeviceList) {
                 DeviceListSheetView(
                     bluetoothManager: bluetoothManager,
-                    nearbyInteractionManager: nearbyInteractionManager
+                    nearbyInteractionManager: nearbyInteractionManager,
+                    isScanning: $isScanning,
+                    startScanning: startScanning,
+                    stopScanning: stopScanning
                 )
                 .presentationDetents([.height(300), .height(500), .large])
                 .presentationDragIndicator(.visible)
@@ -85,6 +90,27 @@ struct FindMyCarMapView: View {
             }
         }
         .ignoresSafeArea(.all, edges: .bottom)
+    }
+    
+    private func startScanning() {
+        isScanning = true
+        // 새 스캔 시작 시 저장되지 않은 디바이스만 제거
+        bluetoothManager.discoveredDevices.removeAll { device in
+            !DeviceStorage.shared.isDeviceSaved(device.bleUniqueID)
+        }
+        bluetoothManager.startScanning()
+        
+        // 30초 후 자동 중지
+        scanTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { _ in
+            stopScanning()
+        }
+    }
+    
+    private func stopScanning() {
+        isScanning = false
+        bluetoothManager.stopScanning()
+        scanTimer?.invalidate()
+        scanTimer = nil
     }
     
     private var deviceAnnotations: [DeviceAnnotation] {
@@ -106,28 +132,77 @@ struct FindMyCarMapView: View {
 struct DeviceListSheetView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
+    @Binding var isScanning: Bool
+    let startScanning: () -> Void
+    let stopScanning: () -> Void
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 16) {
-                    headerSection
-                    
-                    if bluetoothManager.discoveredDevices.isEmpty {
-                        noDevicesView
-                    } else {
-                        deviceListSection
-                    }
-                    
-                    controlsSection
-                }
-                .padding()
-            }
+            deviceListView
             .navigationTitle("Find My Car")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(trailing: navigationBarTrailingButton)
+        }
+        .onReceive(bluetoothManager.$connectionStatus) { status in
+            // 연결 성공 시 스캔 중단
+            if case .connected = status, isScanning {
+                stopScanning()
+            }
         }
     }
+    
+    @ViewBuilder
+    private var navigationBarTrailingButton: some View {
+        Button(action: {
+            if isScanning {
+                stopScanning()
+            } else {
+                startScanning()
+            }
+        }) {
+            Image(systemName: isScanning ? "stop" : "plus")
+                .font(.system(size: 18, weight: .medium))
+        }
+        .disabled(bluetoothManager.isScanning && !isScanning)
+    }
+    
+    private var deviceListView: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                headerSection
+                
+                if bluetoothManager.discoveredDevices.isEmpty && !isScanning {
+                    noDevicesView
+                } else if !bluetoothManager.discoveredDevices.isEmpty {
+                    deviceListSection
+                }
+                
+                // 스캔 중일 때 하단에 프로그래스 표시
+                if isScanning {
+                    scanningProgressView
+                }
+            }
+            .padding()
+        }
+    }
+    
+    private var scanningProgressView: some View {
+        VStack(spacing: 32) {
+            Spacer()
+                .frame(height: 20)
+            
+            VStack(spacing: 12) {
+                ProgressView()
+                    .scaleEffect(1.0)
+                
+                Text("기기 검색 중...")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
     
     private var headerSection: some View {
         VStack(spacing: 12) {
@@ -243,43 +318,203 @@ struct DeviceListSheetView: View {
     }
     
     private var deviceListSection: some View {
-        LazyVStack(spacing: 12) {
-            ForEach(bluetoothManager.discoveredDevices, id: \.bleUniqueID) { device in
-                DeviceCard(
-                    device: device,
-                    bluetoothManager: bluetoothManager,
-                    nearbyInteractionManager: nearbyInteractionManager
-                )
+        LazyVStack(spacing: 16) {
+            // 저장된 디바이스 섹션
+            let savedDevices = bluetoothManager.discoveredDevices.filter { device in
+                DeviceStorage.shared.isDeviceSaved(device.bleUniqueID)
+            }
+            
+            if !savedDevices.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("저장된 디바이스")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    ForEach(savedDevices, id: \.bleUniqueID) { device in
+                        DeviceCard(
+                            device: device,
+                            bluetoothManager: bluetoothManager,
+                            nearbyInteractionManager: nearbyInteractionManager,
+                            isSaved: true
+                        )
+                    }
+                }
+            }
+            
+            // 새로 발견된 디바이스 섹션
+            let newDevices = bluetoothManager.discoveredDevices.filter { device in
+                !DeviceStorage.shared.isDeviceSaved(device.bleUniqueID)
+            }
+            
+            if !newDevices.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("새로 발견된 디바이스")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    ForEach(newDevices, id: \.bleUniqueID) { device in
+                        DeviceCard(
+                            device: device,
+                            bluetoothManager: bluetoothManager,
+                            nearbyInteractionManager: nearbyInteractionManager,
+                            isSaved: false
+                        )
+                    }
+                }
             }
         }
     }
     
-    private var controlsSection: some View {
+}
+
+struct DeviceCard: View {
+    let device: QorvoDevice
+    @ObservedObject var bluetoothManager: BluetoothManager
+    @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
+    let isSaved: Bool
+    
+    var body: some View {
         VStack(spacing: 12) {
-            Button(action: {
-                if bluetoothManager.isScanning {
-                    bluetoothManager.stopScanning()
-                } else {
-                    bluetoothManager.startScanning()
-                }
-            }) {
-                HStack {
-                    if bluetoothManager.isScanning {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                    } else {
-                        Image(systemName: "magnifyingglass")
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "car.fill")
+                            .foregroundColor(statusColor)
+                            .font(.system(size: 16))
+                        
+                        Text(device.blePeripheralName)
+                            .font(.headline)
+                            .fontWeight(.medium)
+                        
+                        if isSaved {
+                            Image(systemName: "bookmark.fill")
+                                .foregroundColor(.blue)
+                                .font(.system(size: 12))
+                        }
                     }
-                    Text(bluetoothManager.isScanning ? "스캔 중지" : "디바이스 스캔")
+                    
+                    Text(device.blePeripheralStatus ?? "알 수 없음")
+                        .font(.subheadline)
+                        .foregroundColor(statusColor)
+                    
+                    if let locationInfo = LocationStorage.shared.getLocationWithTimestamp(for: device.bleUniqueID) {
+                        Text("마지막 위치: \(formatTimestamp(locationInfo.timestamp))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 8) {
+                    if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("\(String(format: "%.2f", location.distance))m")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .foregroundColor(.purple)
+                            
+                            DirectionIndicator(direction: location.direction)
+                        }
+                    }
+                    
+                    HStack(spacing: 8) {
+                        deviceActionButton
+                        
+                        if isSaved {
+                            Button(action: {
+                                bluetoothManager.removeSavedDevice(device.bleUniqueID)
+                            }) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.red)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        } else if device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging {
+                            Button(action: {
+                                bluetoothManager.saveCurrentDevice(device)
+                            }) {
+                                Image(systemName: "bookmark")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.blue)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.blue)
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+    
+    @ViewBuilder
+    private var deviceActionButton: some View {
+        switch device.blePeripheralStatus {
+        case statusDiscovered:
+            Button("연결") {
+                bluetoothManager.connect(to: device)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(bluetoothManager.connectionStatus == .connecting)
+            
+        case statusConnected:
+            Button("UWB 시작") {
+                bluetoothManager.initializeUWB(deviceID: device.bleUniqueID)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(.green)
+            
+        case statusRanging:
+            VStack(spacing: 4) {
+                Button("UWB 중지") {
+                    bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(.orange)
+                
+                Button("위치 저장") {
+                    saveCurrentLocation()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .tint(.purple)
+            }
+            
+        default:
+            EmptyView()
         }
     }
+    
+    private var statusColor: Color {
+        switch device.blePeripheralStatus {
+        case statusConnected:
+            return .green
+        case statusRanging:
+            return .purple
+        case statusDiscovered:
+            return .blue
+        default:
+            return .secondary
+        }
+    }
+    
+    private func saveCurrentLocation() {
+        guard let userLocation = CLLocationManager().location?.coordinate else { return }
+        LocationStorage.shared.saveLocation(deviceID: device.bleUniqueID, coordinate: userLocation)
+    }
+    
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
 }
+
 
 struct DeviceAnnotation {
     let id: Int
@@ -472,6 +707,7 @@ struct MapStyleSheet: View {
         }
     }
 }
+
 
 #Preview {
     FindMyCarMapView()

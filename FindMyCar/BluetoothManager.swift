@@ -53,7 +53,7 @@ struct Location {
 }
 
 class QorvoDevice {
-    var blePeripheral: CBPeripheral
+    var blePeripheral: CBPeripheral?
     var rxCharacteristic: CBCharacteristic?
     var txCharacteristic: CBCharacteristic?
     
@@ -74,6 +74,21 @@ class QorvoDevice {
             direction: SIMD3<Float>(x: 0, y: 0, z: 0),
             elevation: NINearbyObject.VerticalDirectionEstimate.unknown.rawValue,
             noUpdate: false
+        )
+    }
+    
+    // For saved devices without actual peripheral
+    init() {
+        self.blePeripheral = nil
+        self.bleUniqueID = 0
+        self.blePeripheralName = ""
+        self.blePeripheralStatus = "Saved"
+        self.bleTimestamp = 0
+        self.uwbLocation = Location(
+            distance: 0,
+            direction: SIMD3<Float>(x: 0, y: 0, z: 0),
+            elevation: NINearbyObject.VerticalDirectionEstimate.unknown.rawValue,
+            noUpdate: true
         )
     }
 }
@@ -139,6 +154,9 @@ class BluetoothManager: NSObject, ObservableObject {
         
         // Start cleanup timer like in Qorvo sample
         cleanupTimer = Timer.scheduledTimer(timeInterval: 0.2, target: self, selector: #selector(timerHandler), userInfo: nil, repeats: true)
+        
+        // Load saved devices and attempt auto-connect
+        loadSavedDevices()
     }
     
     deinit {
@@ -152,6 +170,18 @@ class BluetoothManager: NSObject, ObservableObject {
         let currentTime = Int64((Date().timeIntervalSince1970 * 1000.0).rounded())
         
         discoveredDevices.removeAll { device in
+            // 저장된 디바이스는 제거하지 않음
+            if DeviceStorage.shared.isDeviceSaved(device.bleUniqueID) {
+                return false
+            }
+            
+            // 연결된 디바이스나 연결 중인 디바이스는 제거하지 않음
+            if device.blePeripheralStatus == statusConnected || 
+               device.blePeripheralStatus == statusRanging {
+                return false
+            }
+            
+            // 발견된 디바이스만 타임아웃으로 제거
             if device.blePeripheralStatus == statusDiscovered {
                 if currentTime > (device.bleTimestamp + 5000) {
                     logger.info("Device \(device.blePeripheralName) timed-out removed")
@@ -203,7 +233,15 @@ class BluetoothManager: NSObject, ObservableObject {
         
         logger.info("Connecting to peripheral: \(deviceToConnect.blePeripheralName)")
         connectionStatus = .connecting
-        centralManager.connect(deviceToConnect.blePeripheral, options: nil)
+        
+        // 연결 시도 시 타임스탬프 업데이트하여 타임아웃으로 제거되지 않도록 함
+        deviceToConnect.bleTimestamp = Int64(Date().timeIntervalSince1970 * 1000)
+        
+        guard let peripheral = deviceToConnect.blePeripheral else {
+            logger.error("Cannot connect: peripheral is nil")
+            return
+        }
+        centralManager.connect(peripheral, options: nil)
     }
     
     func disconnect() {
@@ -222,7 +260,7 @@ class BluetoothManager: NSObject, ObservableObject {
             return
         }
         
-        device.blePeripheral.writeValue(data, for: characteristic, type: .withResponse)
+        device.blePeripheral?.writeValue(data, for: characteristic, type: .withResponse)
         logger.info("Sent data to accessory: \(data.map { String(format: "0x%02x", $0) }.joined(separator: ", "))")
     }
     
@@ -256,10 +294,14 @@ extension BluetoothManager: CBCentralManagerDelegate {
         case .poweredOn:
             logger.info("Bluetooth is powered on and ready")
             bluetoothReady = true
+            connectionStatus = .disconnected
+            
+            // Start auto-connect if needed
             if shouldStartWhenReady {
-                startScanning()
                 shouldStartWhenReady = false
+                attemptAutoConnect()
             }
+            
         case .poweredOff:
             connectionStatus = .failed(BluetoothError.bluetoothOff)
             bluetoothReady = false
@@ -308,7 +350,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         peripheral.delegate = self
         
         // Update device status
-        if let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral == peripheral }) {
+        if let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral === peripheral }) {
             discoveredDevices[deviceIndex].blePeripheralStatus = statusConnected
         }
         
@@ -321,7 +363,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         connectionStatus = .failed(error ?? BluetoothError.connectionFailed)
         
         // Reset device status
-        if let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral == peripheral }) {
+        if let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral === peripheral }) {
             discoveredDevices[deviceIndex].blePeripheralStatus = statusDiscovered
         }
     }
@@ -334,7 +376,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         uwbActive = false
         
         // Reset device status
-        if let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral == peripheral }) {
+        if let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral === peripheral }) {
             discoveredDevices[deviceIndex].blePeripheralStatus = statusDiscovered
             discoveredDevices[deviceIndex].rxCharacteristic = nil
             discoveredDevices[deviceIndex].txCharacteristic = nil
@@ -383,7 +425,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
         
         guard let characteristics = service.characteristics,
-              let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral == peripheral }) else { return }
+              let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral === peripheral }) else { return }
         
         for characteristic in characteristics {
             logger.info("Discovered characteristic: \(characteristic.uuid)")
@@ -425,7 +467,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
         
         guard let data = characteristic.value,
-              let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral == peripheral }) else { return }
+              let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral === peripheral }) else { return }
         
         let dataString = data.map { String(format: "0x%02x", $0) }.joined(separator: ", ")
         logger.info("Received \(data.count) bytes: \(dataString)")
@@ -497,6 +539,67 @@ extension BluetoothManager: CBPeripheralDelegate {
             logger.info("Notification began on \(characteristic.uuid)")
         } else {
             logger.info("Notification stopped on \(characteristic.uuid)")
+        }
+    }
+    
+    // MARK: - Device Storage Integration
+    
+    private func loadSavedDevices() {
+        let savedDevices = DeviceStorage.shared.savedDevices
+        
+        for savedDevice in savedDevices {
+            let qorvoDevice = QorvoDevice()
+            qorvoDevice.bleUniqueID = savedDevice.id
+            qorvoDevice.blePeripheralName = savedDevice.name
+            qorvoDevice.blePeripheralStatus = statusDiscovered // 저장된 디바이스도 발견된 상태로 시작
+            qorvoDevice.bleTimestamp = Int64(Date().timeIntervalSince1970 * 1000)
+            
+            if !discoveredDevices.contains(where: { $0.bleUniqueID == savedDevice.id }) {
+                discoveredDevices.append(qorvoDevice)
+            }
+        }
+        
+        // Start auto-connect when Bluetooth is ready
+        if bluetoothReady {
+            attemptAutoConnect()
+        } else {
+            shouldStartWhenReady = true
+        }
+    }
+    
+    private func attemptAutoConnect() {
+        guard bluetoothReady && !isScanning else { return }
+        
+        let savedDevices = DeviceStorage.shared.savedDevices
+        guard !savedDevices.isEmpty else { return }
+        
+        logger.info("Attempting to auto-connect to \(savedDevices.count) saved devices")
+        
+        // Start scanning to find saved devices
+        startScanning()
+        
+        // Stop auto-scan after 10 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
+            if self?.isScanning == true {
+                self?.stopScanning()
+                self?.logger.info("Auto-connect scan timeout")
+            }
+        }
+    }
+    
+    func saveCurrentDevice(_ device: QorvoDevice) {
+        DeviceStorage.shared.saveDevice(device)
+        
+        // 디바이스를 저장하더라도 실제 연결 상태는 유지
+        // (UI에서 저장 여부는 DeviceStorage.shared.isDeviceSaved()로 확인)
+    }
+    
+    func removeSavedDevice(_ deviceID: Int) {
+        if let savedDevice = DeviceStorage.shared.getSavedDevice(by: deviceID) {
+            DeviceStorage.shared.removeDevice(savedDevice)
+            
+            // Update discovered devices list
+            discoveredDevices.removeAll { $0.bleUniqueID == deviceID }
         }
     }
 }

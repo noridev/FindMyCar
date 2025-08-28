@@ -193,7 +193,8 @@ struct DeviceListSheet: View {
                 DeviceCard(
                     device: device,
                     bluetoothManager: bluetoothManager,
-                    nearbyInteractionManager: nearbyInteractionManager
+                    nearbyInteractionManager: nearbyInteractionManager,
+                    isSaved: DeviceStorage.shared.isDeviceSaved(device.bleUniqueID)
                 )
             }
         }
@@ -228,124 +229,6 @@ struct DeviceListSheet: View {
     }
 }
 
-struct DeviceCard: View {
-    let device: QorvoDevice
-    @ObservedObject var bluetoothManager: BluetoothManager
-    @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Image(systemName: "car.fill")
-                            .foregroundColor(statusColor)
-                            .font(.system(size: 16))
-                        
-                        Text(device.blePeripheralName)
-                            .font(.headline)
-                            .fontWeight(.medium)
-                    }
-                    
-                    Text(device.blePeripheralStatus ?? "알 수 없음")
-                        .font(.subheadline)
-                        .foregroundColor(statusColor)
-                    
-                    if let locationInfo = LocationStorage.shared.getLocationWithTimestamp(for: device.bleUniqueID) {
-                        Text("마지막 위치: \(formatTimestamp(locationInfo.timestamp))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 8) {
-                    if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(String(format: "%.2f", location.distance))m")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(.purple)
-                            
-                            DirectionIndicator(direction: location.direction)
-                        }
-                    }
-                    
-                    deviceActionButton
-                }
-            }
-        }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-    }
-    
-    @ViewBuilder
-    private var deviceActionButton: some View {
-        switch device.blePeripheralStatus {
-        case statusDiscovered:
-            Button("연결") {
-                bluetoothManager.connect(to: device)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(bluetoothManager.connectionStatus == .connecting)
-            
-        case statusConnected:
-            Button("UWB 시작") {
-                bluetoothManager.initializeUWB(deviceID: device.bleUniqueID)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(.green)
-            
-        case statusRanging:
-            VStack(spacing: 4) {
-                Button("UWB 중지") {
-                    bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(.orange)
-                
-                Button("위치 저장") {
-                    saveCurrentLocation()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(.purple)
-            }
-            
-        default:
-            EmptyView()
-        }
-    }
-    
-    private var statusColor: Color {
-        switch device.blePeripheralStatus {
-        case statusConnected:
-            return .green
-        case statusRanging:
-            return .purple
-        case statusDiscovered:
-            return .blue
-        default:
-            return .secondary
-        }
-    }
-    
-    private func saveCurrentLocation() {
-        guard let userLocation = CLLocationManager().location?.coordinate else { return }
-        LocationStorage.shared.saveLocation(deviceID: device.bleUniqueID, coordinate: userLocation)
-    }
-    
-    private func formatTimestamp(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
-}
 
 struct DirectionIndicator: View {
     let direction: simd_float3
