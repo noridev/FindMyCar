@@ -115,6 +115,7 @@ class BluetoothManager: NSObject, ObservableObject {
     private var centralManager: CBCentralManager!
     private var bluetoothReady = false
     private var shouldStartWhenReady = false
+    private var pendingConnectionDeviceID: Int?
     
     // Timer for device cleanup
     private var cleanupTimer: Timer?
@@ -238,7 +239,11 @@ class BluetoothManager: NSObject, ObservableObject {
         deviceToConnect.bleTimestamp = Int64(Date().timeIntervalSince1970 * 1000)
         
         guard let peripheral = deviceToConnect.blePeripheral else {
-            logger.error("Cannot connect: peripheral is nil")
+            logger.error("Cannot connect: peripheral is nil. Starting scan to find peripheral.")
+            // 저장된 디바이스의 경우 peripheral이 nil이므로 스캔을 시작하여 실제 디바이스를 찾음
+            startScanning()
+            // 스캔 후 자동으로 연결하도록 플래그 설정
+            pendingConnectionDeviceID = uniqueID
             return
         }
         centralManager.connect(peripheral, options: nil)
@@ -330,6 +335,10 @@ extension BluetoothManager: CBCentralManagerDelegate {
         // Check if device already exists, if so update timestamp
         if let existingDeviceIndex = discoveredDevices.firstIndex(where: { $0.bleUniqueID == uniqueID }) {
             discoveredDevices[existingDeviceIndex].bleTimestamp = timeStamp
+            // 기존 저장된 디바이스에 peripheral 할당
+            if discoveredDevices[existingDeviceIndex].blePeripheral == nil {
+                discoveredDevices[existingDeviceIndex].blePeripheral = peripheral
+            }
         } else {
             // Add new device
             let newDevice = QorvoDevice(
@@ -339,6 +348,14 @@ extension BluetoothManager: CBCentralManagerDelegate {
                 timeStamp: timeStamp
             )
             discoveredDevices.append(newDevice)
+        }
+        
+        // 대기 중인 연결 요청이 있고 해당 디바이스가 발견된 경우 자동 연결
+        if let pendingDeviceID = pendingConnectionDeviceID, pendingDeviceID == uniqueID {
+            logger.info("Found pending connection device, attempting to connect")
+            stopScanning()
+            pendingConnectionDeviceID = nil
+            connectPeripheral(uniqueID)
         }
     }
     

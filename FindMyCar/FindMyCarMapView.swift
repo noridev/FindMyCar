@@ -453,12 +453,16 @@ struct DeviceCard: View {
     private var deviceActionButton: some View {
         switch device.blePeripheralStatus {
         case statusDiscovered:
-            Button("연결") {
-                bluetoothManager.connect(to: device)
+            if bluetoothManager.connectionStatus == .connecting {
+                ProgressView()
+                    .scaleEffect(0.7)
+            } else {
+                Button("연결") {
+                    bluetoothManager.connect(to: device)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(bluetoothManager.connectionStatus == .connecting)
             
         case statusConnected:
             Button("UWB 시작") {

@@ -282,11 +282,15 @@ struct DeviceRow: View {
             Spacer()
             
             if device.blePeripheralStatus == statusDiscovered {
-                Button("Connect") {
-                    bluetoothManager.connect(to: device)
+                if bluetoothManager.connectionStatus == .connecting {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                } else {
+                    Button("Connect") {
+                        bluetoothManager.connect(to: device)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
-                .disabled(bluetoothManager.connectionStatus == .connecting)
             } else if device.blePeripheralStatus == statusConnected {
                 Text("Connected")
                     .font(.caption)
