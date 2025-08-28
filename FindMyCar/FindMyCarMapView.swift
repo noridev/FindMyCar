@@ -406,41 +406,57 @@ struct DeviceCard: View {
                 
                 Spacer()
                 
-                VStack(alignment: .trailing, spacing: 8) {
-                    if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(String(format: "%.2f", location.distance))m")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundColor(.purple)
-                            
-                            DirectionIndicator(direction: location.direction)
-                        }
-                    }
-                    
-                    HStack(spacing: 8) {
-                        deviceActionButton
+                if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(String(format: "%.2f", location.distance))m")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.purple)
                         
-                        if isSaved {
-                            Button(action: {
-                                bluetoothManager.removeSavedDevice(device.bleUniqueID)
-                            }) {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.red)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        } else if device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging {
-                            Button(action: {
-                                bluetoothManager.saveCurrentDevice(device)
-                            }) {
-                                Image(systemName: "bookmark")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.blue)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
+                        DirectionIndicator(direction: location.direction)
                     }
+                }
+            }
+            
+            // 버튼들을 가로로 꽉차게 배치
+            HStack(spacing: 8) {
+                deviceActionButton
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                
+                if device.blePeripheralStatus == statusRanging {
+                    Button("UWB 중지") {
+                        bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(.orange.opacity(0.1))
+                    .foregroundColor(.orange)
+                    .cornerRadius(24)
+
+                    Button("위치 저장") {
+                        saveCurrentLocation()
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(.purple.opacity(0.1))
+                    .foregroundColor(.purple)
+                    .cornerRadius(24)
+                }
+                
+                if isSaved {
+                    Button("기기 삭제") {
+                        bluetoothManager.removeSavedDevice(device.bleUniqueID)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(.red.opacity(0.1))
+                    .foregroundColor(.red)
+                    .cornerRadius(24)
+                } else if device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging {
+                    Button("기기 저장") {
+                        bluetoothManager.saveCurrentDevice(device)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(.blue.opacity(0.1))
+                    .foregroundColor(.blue)
+                    .cornerRadius(24)
                 }
             }
         }
@@ -454,40 +470,34 @@ struct DeviceCard: View {
         switch device.blePeripheralStatus {
         case statusDiscovered:
             if bluetoothManager.connectionStatus == .connecting {
-                ProgressView()
-                    .scaleEffect(0.7)
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                }
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(.gray.opacity(0.1))
+                .cornerRadius(24)
             } else {
                 Button("연결") {
                     bluetoothManager.connect(to: device)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(.primary.opacity(0.1))
+                .foregroundColor(.primary)
+                .cornerRadius(24)
             }
             
         case statusConnected:
             Button("UWB 시작") {
                 bluetoothManager.initializeUWB(deviceID: device.bleUniqueID)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .tint(.green)
-            
+            .frame(maxWidth: .infinity, minHeight: 36)
+            .background(.green.opacity(0.1))
+            .foregroundColor(.green)
+            .cornerRadius(24)
+
         case statusRanging:
-            VStack(spacing: 4) {
-                Button("UWB 중지") {
-                    bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(.orange)
-                
-                Button("위치 저장") {
-                    saveCurrentLocation()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(.purple)
-            }
+            EmptyView()
             
         default:
             EmptyView()
