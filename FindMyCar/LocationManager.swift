@@ -6,6 +6,7 @@ class LocationManager: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     
     @Published var userLocation: CLLocationCoordinate2D?
+    @Published var userHeading: CLHeading?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var locationError: Error?
     
@@ -14,6 +15,7 @@ class LocationManager: NSObject, ObservableObject {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 1.0
+        locationManager.headingFilter = 1.0 // 1도마다 헤딩 업데이트
     }
     
     func requestLocationPermission() {
@@ -36,10 +38,13 @@ class LocationManager: NSObject, ObservableObject {
         }
         
         locationManager.startUpdatingLocation()
+        locationManager.startUpdatingHeading()
+        print("Location and heading updates started")
     }
     
     private func stopLocationUpdates() {
         locationManager.stopUpdatingLocation()
+        locationManager.stopUpdatingHeading()
     }
 }
 
@@ -49,6 +54,13 @@ extension LocationManager: CLLocationManagerDelegate {
         
         DispatchQueue.main.async {
             self.userLocation = location.coordinate
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        DispatchQueue.main.async {
+            self.userHeading = newHeading
+            print("Heading updated: \(newHeading.trueHeading)° (true), \(newHeading.magneticHeading)° (magnetic)")
         }
     }
     

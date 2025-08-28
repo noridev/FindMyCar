@@ -23,14 +23,11 @@ struct FindMyCarMapView: View {
         ZStack {
             MapReader { proxy in
                 Map(position: $cameraPosition) {
-                    if let userLocation = locationManager.userLocation {
-                        Marker("You", systemImage: "person.circle.fill", coordinate: userLocation)
-                            .tint(.blue)
-                    }
+                    UserAnnotation()
                     
                     ForEach(Array(deviceAnnotations.enumerated()), id: \.offset) { index, annotation in
                         Annotation(annotation.title, coordinate: annotation.coordinate, anchor: .bottom) {
-                            CarAnnotationView(device: annotation.device)
+                            CarAnnotationView(device: annotation.device, bluetoothManager: bluetoothManager)
                         }
                     }
                 }
@@ -462,7 +459,7 @@ struct DeviceCard: View {
         }
         .padding()
         .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .cornerRadius(32)
     }
     
     @ViewBuilder
@@ -539,31 +536,76 @@ struct DeviceAnnotation {
 
 struct CarAnnotationView: View {
     let device: QorvoDevice
+    let bluetoothManager: BluetoothManager
+    @State private var isAnimating = false
+    @State private var currentStatus: String = ""
     
     var body: some View {
         ZStack {
+            // 외부 링 (트래킹 중일 때만 표시)
+            if currentStatus == statusRanging {
+                Circle()
+                    .stroke(statusColor, lineWidth: 2)
+                    .frame(width: 70, height: 70)
+                    .scaleEffect(isAnimating ? 1.2 : 1.0)
+                    .opacity(isAnimating ? 0.0 : 0.8)
+                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false), value: isAnimating)
+            }
+            
+            // 배경 원
             Circle()
                 .fill(statusColor.opacity(0.3))
                 .frame(width: 60, height: 60)
             
+            // 메인 원
             Circle()
                 .fill(statusColor)
                 .frame(width: 40, height: 40)
             
+            // 차량 아이콘
             Image(systemName: "car.fill")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.white)
         }
         .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+        .onAppear {
+            updateStatus()
+        }
+        .onReceive(bluetoothManager.$discoveredDevices) { _ in
+            updateStatus()
+        }
+    }
+    
+    private func updateStatus() {
+        // BluetoothManager에서 현재 디바이스의 최신 상태를 가져옴
+        if let currentDevice = bluetoothManager.discoveredDevices.first(where: { $0.bleUniqueID == device.bleUniqueID }) {
+            currentStatus = currentDevice.blePeripheralStatus ?? ""
+        } else {
+            currentStatus = device.blePeripheralStatus ?? ""
+        }
+        
+        if currentStatus == statusRanging {
+            isAnimating = true
+        } else {
+            isAnimating = false
+        }
+        
+        print("Device \(device.blePeripheralName) updated status: \(currentStatus)")
     }
     
     private var statusColor: Color {
-        switch device.blePeripheralStatus {
+        // 디버깅을 위해 현재 상태 출력
+        print("Device \(device.blePeripheralName) status: \(currentStatus)")
+        
+        switch currentStatus {
         case statusConnected:
+            print("Status: Connected -> Green")
             return .green
         case statusRanging:
-            return .purple
+            print("Status: Ranging -> Blue")
+            return .blue
         default:
+            print("Status: Default -> Gray")
             return .gray
         }
     }
