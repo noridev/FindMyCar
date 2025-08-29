@@ -377,39 +377,29 @@ struct DeviceCard: View {
                 ZStack {
                     Circle()
                         .fill(statusColor.opacity(0.15))
-                        .frame(width: 32, height: 32)
+                        .frame(width: 48, height: 48)
                     
                     Image(systemName: "car.fill")
-                        .font(.system(size: 28, weight: .medium))
+                        .font(.system(size: 24, weight: .medium))
                         .foregroundColor(statusColor)
                 }
                 
                 // 기기 정보 (중앙)
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text(device.blePeripheralName)
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-
-                        if isSaved {
-                            Image(systemName: "bookmark.fill")
-                                .foregroundColor(.blue)
-                                .font(.system(size: 12))
-                        }
-                    }
+                    Text(device.blePeripheralName)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
                     
-                    if !currentAddress.isEmpty {
-                        Text(currentAddress)
+                    if let locationInfo = LocationStorage.shared.getLocationWithTimestamp(for: device.bleUniqueID) {
+                        let addressText = currentAddress.isEmpty ? "위치 정보 없음" : currentAddress
+                        let timeText = formatTimestamp(locationInfo.timestamp)
+                        
+                        Text("\(addressText)・\(timeText)")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .lineLimit(2)
-                    }
-                    
-                    if let locationInfo = LocationStorage.shared.getLocationWithTimestamp(for: device.bleUniqueID) {
-                        Text("마지막으로 확인: \(formatTimestamp(locationInfo.timestamp))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
                     }
                 }
                 
@@ -536,6 +526,12 @@ struct DeviceCard: View {
     }
 
     private func formatTimestamp(_ date: Date) -> String {
+        let timeInterval = Date().timeIntervalSince(date)
+        
+        if timeInterval < 60 {
+            return "지금"
+        }
+        
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
