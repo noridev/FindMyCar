@@ -368,19 +368,29 @@ struct DeviceCard: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
     let isSaved: Bool
+    @State private var currentAddress: String = ""
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack {
+        VStack(spacing: 16) {
+            HStack(spacing: 16) {
+                // 원형 기기 아이콘 (왼쪽)
+                ZStack {
+                    Circle()
+                        .fill(statusColor.opacity(0.15))
+                        .frame(width: 32, height: 32)
+                    
+                    Image(systemName: "car.fill")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundColor(statusColor)
+                }
+                
+                // 기기 정보 (중앙)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Image(systemName: "car.fill")
-                            .foregroundColor(statusColor)
-                            .font(.system(size: 16))
-
                         Text(device.blePeripheralName)
                             .font(.headline)
-                            .fontWeight(.medium)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
 
                         if isSaved {
                             Image(systemName: "bookmark.fill")
@@ -388,30 +398,37 @@ struct DeviceCard: View {
                                 .font(.system(size: 12))
                         }
                     }
-
-                    Text(device.blePeripheralStatus ?? "알 수 없음")
-                        .font(.subheadline)
-                        .foregroundColor(statusColor)
-
+                    
+                    if !currentAddress.isEmpty {
+                        Text(currentAddress)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
+                    
                     if let locationInfo = LocationStorage.shared.getLocationWithTimestamp(for: device.bleUniqueID) {
-                        Text("마지막 위치: \(formatTimestamp(locationInfo.timestamp))")
+                        Text("마지막으로 확인: \(formatTimestamp(locationInfo.timestamp))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
-
+                
                 Spacer()
-
+                
+                // 거리 정보 (오른쪽)
                 if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(String(format: "%.2f", location.distance))m")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(.purple)
-
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("\(String(format: "%.0f", location.distance))m")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                        
                         DirectionIndicator(direction: location.direction)
                     }
                 }
+            }
+            .onAppear {
+                loadAddressForDevice()
             }
 
             // 버튼들을 가로로 꽉차게 배치
@@ -522,6 +539,50 @@ struct DeviceCard: View {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+    
+    private func loadAddressForDevice() {
+        guard let locationInfo = LocationStorage.shared.getLocationWithTimestamp(for: device.bleUniqueID) else {
+            return
+        }
+        
+        let location = CLLocation(latitude: locationInfo.coordinate.latitude, longitude: locationInfo.coordinate.longitude)
+        reverseGeocode(location: location) { address in
+            DispatchQueue.main.async {
+                self.currentAddress = address
+            }
+        }
+    }
+    
+    private func reverseGeocode(location: CLLocation, completion: @escaping (String) -> Void) {
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(location) { placemarks, error in
+            if let error = error {
+                print("Reverse geocoding failed: \(error.localizedDescription)")
+                completion("")
+                return
+            }
+            
+            guard let placemark = placemarks?.first else {
+                completion("")
+                return
+            }
+            
+            var addressComponents: [String] = []
+            
+            if let locality = placemark.locality {
+                addressComponents.append(locality)
+            }
+            if let thoroughfare = placemark.thoroughfare {
+                addressComponents.append(thoroughfare)
+            }
+            if let subThoroughfare = placemark.subThoroughfare {
+                addressComponents.append(subThoroughfare)
+            }
+            
+            let address = addressComponents.joined(separator: " ")
+            completion(address.isEmpty ? "위치 정보 없음" : address)
+        }
     }
 }
 
