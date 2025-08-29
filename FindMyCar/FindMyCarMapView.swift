@@ -38,6 +38,7 @@ struct FindMyCarMapView: View {
                     MapUserLocationButton()
                     MapPitchToggle()
                 }
+                .foregroundStyle(Color.secondary)
                 .onAppear {
                     locationManager.requestLocationPermission()
                     if let userLocation = locationManager.userLocation {
@@ -346,23 +347,6 @@ struct DeviceListSheetView: View {
             }
         }
     }
-    
-    private func bluetoothDistanceText(for device: QorvoDevice) -> String {
-        guard let rssi = device.bleRSSI else {
-            return "근처에 없음"
-        }
-        
-        let rssiValue = rssi.intValue
-        if rssiValue >= -50 {
-            return "매우 가까움"
-        } else if rssiValue >= -70 {
-            return "가까움"
-        } else if rssiValue >= -85 {
-            return "근처에 있음"
-        } else {
-            return "멀리 있음"
-        }
-    }
 
     private var noDevicesView: some View {
         VStack(spacing: 16) {
@@ -471,6 +455,7 @@ struct DeviceCard: View {
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 4) {
+                    // UWB 활성화 시 정확한 거리와 방향 표시
                     if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
                         Text("\(String(format: "%.0f", location.distance))m")
                             .font(.title2)
@@ -478,8 +463,17 @@ struct DeviceCard: View {
                             .foregroundColor(.primary)
                         
                         DirectionIndicator(direction: location.direction)
-                    } else if let savedLocation = LocationStorage.shared.getLastLocation(for: device.bleUniqueID),
-                              let userLocation = CLLocationManager().location?.coordinate {
+                    }
+                    // 블루투스 연결 시 RSSI 기반 상태 표시
+                    else if device.blePeripheralStatus == statusConnected {
+                        Text(bluetoothDistanceText(for: device))
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.blue)
+                    }
+                    // 저장된 위치가 있을 때 실제 거리 표시 (연결되지 않은 경우)
+                    else if let savedLocation = LocationStorage.shared.getLastLocation(for: device.bleUniqueID),
+                            let userLocation = CLLocationManager().location?.coordinate {
                         let savedCLLocation = CLLocation(latitude: savedLocation.latitude, longitude: savedLocation.longitude)
                         let currentLocation = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
                         let distance = savedCLLocation.distance(from: currentLocation)
@@ -860,6 +854,24 @@ struct MapStyleSheet: View {
         case .hybrid:
             return "위성 사진에 도로와 지명을 함께 표시"
         }
+    }
+}
+
+// MARK: - Helper Functions
+func bluetoothDistanceText(for device: QorvoDevice) -> String {
+    guard let rssi = device.bleRSSI else {
+        return "근처에 없음"
+    }
+    
+    let rssiValue = rssi.intValue
+    if rssiValue >= -50 {
+        return "매우 가까움"
+    } else if rssiValue >= -70 {
+        return "가까움"
+    } else if rssiValue >= -85 {
+        return "근처에 있음"
+    } else {
+        return "멀리 있음"
     }
 }
 
