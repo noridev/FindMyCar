@@ -484,7 +484,16 @@ struct DeviceCard: View {
             }
 
         case statusConnected, statusRanging:
-            EmptyView()
+            Button("연결 해제") {
+                if nearbyInteractionManager.isSessionActive {
+                    nearbyInteractionManager.stopSession()
+                }
+                bluetoothManager.disconnect()
+            }
+            .frame(maxWidth: .infinity, minHeight: 36)
+            .background(.orange.opacity(0.1))
+            .foregroundColor(.orange)
+            .cornerRadius(24)
 
         default:
             EmptyView()
