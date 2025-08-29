@@ -308,21 +308,23 @@ struct DeviceListSheetView: View {
             if showButtons {
                 HStack(spacing: 8) {
                     if nearbyInteractionManager.isSessionActive {
-                        Button("UWB 중지") {
-                            bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(.orange.opacity(0.1))
-                        .foregroundColor(.orange)
-                        .cornerRadius(24)
+                        Text("블루투스만 사용")
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(24)
+                            .onTapGesture {
+                                bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
+                            }
                     } else {
-                        Button("UWB 시작") {
-                            bluetoothManager.initializeUWB(deviceID: device.bleUniqueID)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(.green.opacity(0.1))
-                        .foregroundColor(.green)
-                        .cornerRadius(24)
+                        Text("초광대역으로 연결")
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(.green.opacity(0.1))
+                            .foregroundColor(.green)
+                            .cornerRadius(24)
+                            .onTapGesture {
+                                bluetoothManager.initializeUWB(deviceID: device.bleUniqueID)
+                            }
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -499,21 +501,23 @@ struct DeviceCard: View {
                         .frame(maxWidth: .infinity, minHeight: 36)
                     
                     if isSaved {
-                        Button("기기 삭제") {
-                            bluetoothManager.removeSavedDevice(device.bleUniqueID)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(.red.opacity(0.1))
-                        .foregroundColor(.red)
-                        .cornerRadius(24)
+                        Text("차량 삭제")
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(24)
+                            .onTapGesture {
+                                bluetoothManager.removeSavedDevice(device.bleUniqueID)
+                            }
                     } else if device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging {
-                        Button("기기 저장") {
-                            bluetoothManager.saveCurrentDevice(device)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(.blue.opacity(0.1))
-                        .foregroundColor(.blue)
-                        .cornerRadius(24)
+                        Text("차량 등록")
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(.blue.opacity(0.1))
+                            .foregroundColor(.blue)
+                            .cornerRadius(24)
+                            .onTapGesture {
+                                bluetoothManager.saveCurrentDevice(device)
+                            }
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -537,26 +541,28 @@ struct DeviceCard: View {
                 .background(.gray.opacity(0.1))
                 .cornerRadius(24)
             } else {
-                Button("연결") {
-                    bluetoothManager.connect(to: device)
-                }
-                .frame(maxWidth: .infinity, minHeight: 36)
-                .background(.primary.opacity(0.1))
-                .foregroundColor(.primary)
-                .cornerRadius(24)
+                Text("연결")
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(.primary.opacity(0.1))
+                    .foregroundColor(.primary)
+                    .cornerRadius(24)
+                    .onTapGesture {
+                        bluetoothManager.connect(to: device)
+                    }
             }
 
         case statusConnected, statusRanging:
-            Button("연결 해제") {
-                if nearbyInteractionManager.isSessionActive {
-                    nearbyInteractionManager.stopSession()
+            Text("연결 해제")
+                .frame(maxWidth: .infinity, minHeight: 36)
+                .background(.orange.opacity(0.1))
+                .foregroundColor(.orange)
+                .cornerRadius(24)
+                .onTapGesture {
+                    if nearbyInteractionManager.isSessionActive {
+                        nearbyInteractionManager.stopSession()
+                    }
+                    bluetoothManager.disconnect()
                 }
-                bluetoothManager.disconnect()
-            }
-            .frame(maxWidth: .infinity, minHeight: 36)
-            .background(.orange.opacity(0.1))
-            .foregroundColor(.orange)
-            .cornerRadius(24)
 
         default:
             EmptyView()
