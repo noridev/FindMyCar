@@ -19,6 +19,7 @@ class DeviceStorage: ObservableObject {
     
     private let userDefaults = UserDefaults.standard
     private let savedDevicesKey = "SavedDevices"
+    private let lastConnectedDeviceKey = "LastConnectedDevice"
     
     private init() {
         loadDevices()
@@ -63,5 +64,14 @@ class DeviceStorage: ObservableObject {
         if let data = try? JSONEncoder().encode(savedDevices) {
             userDefaults.set(data, forKey: savedDevicesKey)
         }
+    }
+    
+    func setLastConnectedDevice(_ deviceID: Int) {
+        userDefaults.set(deviceID, forKey: lastConnectedDeviceKey)
+    }
+    
+    func getLastConnectedDevice() -> Int? {
+        let deviceID = userDefaults.integer(forKey: lastConnectedDeviceKey)
+        return deviceID == 0 ? nil : deviceID
     }
 }

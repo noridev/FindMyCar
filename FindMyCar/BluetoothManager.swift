@@ -366,6 +366,13 @@ extension BluetoothManager: CBCentralManagerDelegate {
             pendingConnectionDeviceID = nil
             connectPeripheral(uniqueID)
         }
+        // 마지막 연결 디바이스가 아니지만 저장된 디바이스가 발견된 경우에도 자동 연결 시도
+        else if DeviceStorage.shared.isDeviceSaved(uniqueID) && 
+                 connectionStatus == .disconnected && 
+                 !isScanning {
+            logger.info("Found saved device, attempting to auto-connect")
+            connectPeripheral(uniqueID)
+        }
     }
     
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
@@ -375,9 +382,10 @@ extension BluetoothManager: CBCentralManagerDelegate {
         connectionStatus = .connected
         peripheral.delegate = self
         
-        // Update device status
+        // Update device status and save as last connected device
         if let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral === peripheral }) {
             discoveredDevices[deviceIndex].blePeripheralStatus = statusConnected
+            DeviceStorage.shared.setLastConnectedDevice(discoveredDevices[deviceIndex].bleUniqueID)
         }
         
         // Start reading RSSI periodically
@@ -599,19 +607,52 @@ extension BluetoothManager: CBPeripheralDelegate {
     private func attemptAutoConnect() {
         guard bluetoothReady && !isScanning else { return }
         
+        // Try to connect to the last connected device first
+        if let lastConnectedDeviceID = DeviceStorage.shared.getLastConnectedDevice() {
+            logger.info("Attempting to auto-connect to last connected device: \(lastConnectedDeviceID)")
+            
+            // Check if device is already in discovered list
+            if getDeviceFromUniqueID(lastConnectedDeviceID) != nil {
+                connectPeripheral(lastConnectedDeviceID)
+                return
+            } else {
+                // Start scanning to find the last connected device
+                startScanning()
+                pendingConnectionDeviceID = lastConnectedDeviceID
+                
+                // Stop auto-scan after 15 seconds if device not found
+                DispatchQueue.main.asyncAfter(deadline: .now() + 15.0) { [weak self] in
+                    if self?.isScanning == true && self?.pendingConnectionDeviceID == lastConnectedDeviceID {
+                        self?.logger.info("Auto-connect to last device timeout")
+                        self?.pendingConnectionDeviceID = nil
+                        self?.stopScanning()
+                        self?.attemptConnectToAnySavedDevice()
+                    }
+                }
+                return
+            }
+        }
+        
+        // If no last connected device, try to connect to any saved device
+        attemptConnectToAnySavedDevice()
+    }
+    
+    private func attemptConnectToAnySavedDevice() {
         let savedDevices = DeviceStorage.shared.savedDevices
         guard !savedDevices.isEmpty else { return }
         
-        logger.info("Attempting to auto-connect to \(savedDevices.count) saved devices")
+        logger.info("Attempting to auto-connect to any of \(savedDevices.count) saved devices")
         
         // Start scanning to find saved devices
-        startScanning()
+        if !isScanning {
+            startScanning()
+        }
         
         // Stop auto-scan after 10 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
-            if self?.isScanning == true {
+            if self?.isScanning == true && self?.pendingConnectionDeviceID == nil {
                 self?.stopScanning()
-                self?.logger.info("Auto-connect scan timeout")
+                self?.logger.info("Auto-connect to saved devices timeout")
             }
         }
     }
