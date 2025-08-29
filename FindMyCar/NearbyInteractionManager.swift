@@ -5,6 +5,7 @@ import simd
 import os.log
 import CoreBluetooth
 import CoreLocation
+import SwiftUI
 
 class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDelegate {
     private let logger = Logger(subsystem: "com.findmycar.app", category: "NearbyInteractionManager")
@@ -68,7 +69,9 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
         niSessions.removeAll()
         configurations.removeAll()
         
-        isSessionActive = false
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            isSessionActive = false
+        }
         sessionStatus = .idle
         distance = nil
         direction = nil
@@ -93,7 +96,9 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
             // Run the session
             session.run(configuration)
             
-            isSessionActive = true
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                isSessionActive = true
+            }
             sessionStatus = .running
             selectedDeviceID = deviceID
             
@@ -142,7 +147,9 @@ extension NearbyInteractionManager {
             
             // If this was the selected device, update UI
             if deviceID == selectedDeviceID {
-                isSessionActive = false
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    isSessionActive = false
+                }
                 sessionStatus = .idle
                 distance = nil
                 direction = nil
@@ -233,7 +240,9 @@ extension NearbyInteractionManager: NISessionDelegate {
         
         DispatchQueue.main.async {
             self.sessionStatus = .failed(error)
-            self.isSessionActive = false
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                self.isSessionActive = false
+            }
         }
         
         // Handle specific error types
