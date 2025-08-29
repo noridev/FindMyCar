@@ -136,12 +136,11 @@ struct DeviceListSheetView: View {
     var body: some View {
         NavigationView {
             deviceListView
-            .navigationTitle("Find My Car")
+            .navigationTitle("나의 차량")
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarItems(trailing: navigationBarTrailingButton)
         }
         .onReceive(bluetoothManager.$connectionStatus) { status in
-            // 연결 성공 시 스캔 중단
             if case .connected = status, isScanning {
                 stopScanning()
             }
@@ -369,6 +368,7 @@ struct DeviceCard: View {
     @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
     let isSaved: Bool
     @State private var currentAddress: String = ""
+    @State private var showButtons: Bool = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -429,50 +429,58 @@ struct DeviceCard: View {
                     }
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showButtons.toggle()
+                }
+            }
             .onAppear {
                 loadAddressForDevice()
             }
 
-            // 버튼들을 가로로 꽉차게 배치
-            HStack(spacing: 8) {
-                deviceActionButton
-                    .frame(maxWidth: .infinity, minHeight: 36)
+            if showButtons {
+                HStack(spacing: 8) {
+                    deviceActionButton
+                        .frame(maxWidth: .infinity, minHeight: 36)
 
-                if device.blePeripheralStatus == statusRanging {
-                    Button("UWB 중지") {
-                        bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 36)
-                    .background(.orange.opacity(0.1))
-                    .foregroundColor(.orange)
-                    .cornerRadius(24)
+                    if device.blePeripheralStatus == statusRanging {
+                        Button("UWB 중지") {
+                            bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background(.orange.opacity(0.1))
+                        .foregroundColor(.orange)
+                        .cornerRadius(24)
 
-                    Button("위치 저장") {
-                        saveCurrentLocation()
+                        Button("위치 저장") {
+                            saveCurrentLocation()
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background(.purple.opacity(0.1))
+                        .foregroundColor(.purple)
+                        .cornerRadius(24)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 36)
-                    .background(.purple.opacity(0.1))
-                    .foregroundColor(.purple)
-                    .cornerRadius(24)
+
+                    if isSaved {
+                        Button("기기 삭제") {
+                            bluetoothManager.removeSavedDevice(device.bleUniqueID)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background(.red.opacity(0.1))
+                        .foregroundColor(.red)
+                        .cornerRadius(24)
+                    } else if device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging {
+                        Button("기기 저장") {
+                            bluetoothManager.saveCurrentDevice(device)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background(.blue.opacity(0.1))
+                        .foregroundColor(.blue)
+                        .cornerRadius(24)
+                    }
                 }
-
-                if isSaved {
-                    Button("기기 삭제") {
-                        bluetoothManager.removeSavedDevice(device.bleUniqueID)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 36)
-                    .background(.red.opacity(0.1))
-                    .foregroundColor(.red)
-                    .cornerRadius(24)
-                } else if device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging {
-                    Button("기기 저장") {
-                        bluetoothManager.saveCurrentDevice(device)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 36)
-                    .background(.blue.opacity(0.1))
-                    .foregroundColor(.blue)
-                    .cornerRadius(24)
-                }
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
         .padding()
