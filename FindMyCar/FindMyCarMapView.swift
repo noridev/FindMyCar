@@ -90,13 +90,11 @@ struct FindMyCarMapView: View {
 
     private func startScanning() {
         isScanning = true
-        // 새 스캔 시작 시 저장되지 않은 디바이스만 제거
         bluetoothManager.discoveredDevices.removeAll { device in
             !DeviceStorage.shared.isDeviceSaved(device.bleUniqueID)
         }
         bluetoothManager.startScanning()
 
-        // 30초 후 자동 중지
         scanTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { _ in
             stopScanning()
         }
@@ -137,8 +135,12 @@ struct DeviceListSheetView: View {
         NavigationView {
             deviceListView
             .navigationTitle("나의 차량")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(trailing: navigationBarTrailingButton)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    navigationBarTrailingButton
+                }
+            }
         }
         .onReceive(bluetoothManager.$connectionStatus) { status in
             if case .connected = status, isScanning {
@@ -172,8 +174,7 @@ struct DeviceListSheetView: View {
                 } else if !bluetoothManager.discoveredDevices.isEmpty {
                     deviceListSection
                 }
-
-                // 스캔 중일 때 하단에 프로그래스 표시
+                
                 if isScanning {
                     scanningProgressView
                 }
@@ -198,7 +199,6 @@ struct DeviceListSheetView: View {
         }
     }
 
-
     private var headerSection: some View {
         VStack(spacing: 12) {
             HStack {
@@ -211,7 +211,6 @@ struct DeviceListSheetView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-
                 Spacer()
 
                 connectionStatusIndicator
@@ -314,14 +313,13 @@ struct DeviceListSheetView: View {
 
     private var deviceListSection: some View {
         LazyVStack(spacing: 16) {
-            // 저장된 디바이스 섹션
             let savedDevices = bluetoothManager.discoveredDevices.filter { device in
                 DeviceStorage.shared.isDeviceSaved(device.bleUniqueID)
             }
 
             if !savedDevices.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("저장된 디바이스")
+                    Text("저장된 차량")
                         .font(.headline)
                         .foregroundColor(.primary)
 
@@ -335,15 +333,14 @@ struct DeviceListSheetView: View {
                     }
                 }
             }
-
-            // 새로 발견된 디바이스 섹션
+            
             let newDevices = bluetoothManager.discoveredDevices.filter { device in
                 !DeviceStorage.shared.isDeviceSaved(device.bleUniqueID)
             }
 
             if !newDevices.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("새로 발견된 디바이스")
+                    Text("새로 발견된 차량")
                         .font(.headline)
                         .foregroundColor(.primary)
 
@@ -359,7 +356,6 @@ struct DeviceListSheetView: View {
             }
         }
     }
-
 }
 
 struct DeviceCard: View {
@@ -373,7 +369,6 @@ struct DeviceCard: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack(spacing: 16) {
-                // 원형 기기 아이콘 (왼쪽)
                 ZStack {
                     Circle()
                         .fill(statusColor.opacity(0.15))
@@ -384,7 +379,6 @@ struct DeviceCard: View {
                         .foregroundColor(statusColor)
                 }
                 
-                // 기기 정보 (중앙)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(device.blePeripheralName)
                         .font(.headline)
@@ -405,10 +399,8 @@ struct DeviceCard: View {
                 
                 Spacer()
                 
-                // 거리 정보 (오른쪽)
                 VStack(alignment: .trailing, spacing: 4) {
                     if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
-                        // UWB로 실시간 거리 측정 중
                         Text("\(String(format: "%.0f", location.distance))m")
                             .font(.title2)
                             .fontWeight(.semibold)
@@ -417,7 +409,6 @@ struct DeviceCard: View {
                         DirectionIndicator(direction: location.direction)
                     } else if let savedLocation = LocationStorage.shared.getLastLocation(for: device.bleUniqueID),
                               let userLocation = CLLocationManager().location?.coordinate {
-                        // 저장된 위치와 현재 위치 간의 거리 계산
                         let savedCLLocation = CLLocation(latitude: savedLocation.latitude, longitude: savedLocation.longitude)
                         let currentLocation = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
                         let distance = savedCLLocation.distance(from: currentLocation)
@@ -443,25 +434,7 @@ struct DeviceCard: View {
                 HStack(spacing: 8) {
                     deviceActionButton
                         .frame(maxWidth: .infinity, minHeight: 36)
-
-                    if device.blePeripheralStatus == statusRanging {
-                        Button("UWB 중지") {
-                            bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(.orange.opacity(0.1))
-                        .foregroundColor(.orange)
-                        .cornerRadius(24)
-
-                        Button("위치 저장") {
-                            saveCurrentLocation()
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                        .background(.purple.opacity(0.1))
-                        .foregroundColor(.purple)
-                        .cornerRadius(24)
-                    }
-
+                    
                     if isSaved {
                         Button("기기 삭제") {
                             bluetoothManager.removeSavedDevice(device.bleUniqueID)
@@ -510,16 +483,7 @@ struct DeviceCard: View {
                 .cornerRadius(24)
             }
 
-        case statusConnected:
-            Button("UWB 시작") {
-                bluetoothManager.initializeUWB(deviceID: device.bleUniqueID)
-            }
-            .frame(maxWidth: .infinity, minHeight: 36)
-            .background(.green.opacity(0.1))
-            .foregroundColor(.green)
-            .cornerRadius(24)
-
-        case statusRanging:
+        case statusConnected, statusRanging:
             EmptyView()
 
         default:
@@ -548,7 +512,6 @@ struct DeviceCard: View {
     private func formatTimestamp(_ date: Date) -> String {
         let timeInterval = Date().timeIntervalSince(date)
         
-        // 기기가 연결되어 있고 60초 이내인 경우에만 "지금" 표시
         if timeInterval < 60 && (device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging) {
             return "지금"
         }
@@ -603,7 +566,6 @@ struct DeviceCard: View {
     }
 }
 
-
 struct DeviceAnnotation {
     let id: Int
     let title: String
@@ -619,7 +581,6 @@ struct CarAnnotationView: View {
 
     var body: some View {
         ZStack {
-            // 외부 링 (트래킹 중일 때만 표시)
             if currentStatus == statusRanging {
                 Circle()
                     .stroke(statusColor, lineWidth: 2)
@@ -628,18 +589,15 @@ struct CarAnnotationView: View {
                     .opacity(isAnimating ? 0.0 : 0.8)
                     .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false), value: isAnimating)
             }
-
-            // 배경 원
+            
             Circle()
                 .fill(statusColor.opacity(0.3))
                 .frame(width: 60, height: 60)
-
-            // 메인 원
+            
             Circle()
                 .fill(statusColor)
                 .frame(width: 40, height: 40)
-
-            // 차량 아이콘
+            
             Image(systemName: "car.fill")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.white)
@@ -654,7 +612,6 @@ struct CarAnnotationView: View {
     }
 
     private func updateStatus() {
-        // BluetoothManager에서 현재 디바이스의 최신 상태를 가져옴
         if let currentDevice = bluetoothManager.discoveredDevices.first(where: { $0.bleUniqueID == device.bleUniqueID }) {
             currentStatus = currentDevice.blePeripheralStatus ?? ""
         } else {
@@ -671,7 +628,6 @@ struct CarAnnotationView: View {
     }
 
     private var statusColor: Color {
-        // 디버깅을 위해 현재 상태 출력
         print("Device \(device.blePeripheralName) status: \(currentStatus)")
 
         switch currentStatus {
@@ -822,7 +778,6 @@ struct MapStyleSheet: View {
         }
     }
 }
-
 
 #Preview {
     FindMyCarMapView()
