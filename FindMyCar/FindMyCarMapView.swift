@@ -253,13 +253,19 @@ struct DeviceListSheetView: View {
     @ViewBuilder
     private func activeSessionCard(for device: QorvoDevice) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "location.circle.fill")
-                    .foregroundColor(nearbyInteractionManager.isSessionActive ? .purple : .blue)
-                Text(nearbyInteractionManager.isSessionActive ? "활성 추적" : "블루투스 연결")
-                    .font(.headline)
-                    .fontWeight(.medium)
-                Spacer()
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Image(systemName: "location.circle.fill")
+                        .foregroundColor(nearbyInteractionManager.isSessionActive ? .purple : .blue)
+                    Text("활성 추적")
+                        .font(.headline)
+                        .fontWeight(.medium)
+                    Spacer()
+                }
+                
+                Text(nearbyInteractionManager.isSessionActive ? "초광대역(UWB) 연결" : "블루투스 연결")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
             }
 
             if nearbyInteractionManager.isSessionActive {
