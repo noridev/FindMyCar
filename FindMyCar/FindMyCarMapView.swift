@@ -130,6 +130,7 @@ struct DeviceListSheetView: View {
     let startScanning: () -> Void
     let stopScanning: () -> Void
     @Environment(\.dismiss) var dismiss
+    @State private var showButtons: Bool = false
 
     var body: some View {
         NavigationView {
@@ -216,8 +217,8 @@ struct DeviceListSheetView: View {
                 connectionStatusIndicator
             }
 
-            if nearbyInteractionManager.isSessionActive {
-                activeSessionCard
+            if let connectedDevice = bluetoothManager.discoveredDevices.first(where: { $0.blePeripheralStatus == statusConnected || $0.blePeripheralStatus == statusRanging }) {
+                activeSessionCard(for: connectedDevice)
             }
         }
     }
@@ -249,48 +250,110 @@ struct DeviceListSheetView: View {
         }
     }
 
-    private var activeSessionCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    @ViewBuilder
+    private func activeSessionCard(for device: QorvoDevice) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "location.circle.fill")
-                    .foregroundColor(.purple)
-                Text("활성 추적")
+                    .foregroundColor(nearbyInteractionManager.isSessionActive ? .purple : .blue)
+                Text(nearbyInteractionManager.isSessionActive ? "활성 추적" : "블루투스 연결")
                     .font(.headline)
                     .fontWeight(.medium)
                 Spacer()
             }
 
-            if let distance = nearbyInteractionManager.distance {
+            if nearbyInteractionManager.isSessionActive {
+                if let distance = nearbyInteractionManager.distance {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("거리")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("\(String(format: "%.2f", distance))m")
+                                .font(.title3)
+                                .fontWeight(.semibold)
+                        }
+
+                        Spacer()
+
+                        if let direction = nearbyInteractionManager.direction {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("방향")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                DirectionIndicator(direction: direction)
+                            }
+                        }
+                    }
+                } else {
+                    Text("위치 정보를 받고 있습니다...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            } else {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("거리")
+                        Text("상태")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        Text("\(String(format: "%.2f", distance))m")
+                        Text(bluetoothDistanceText(for: device))
                             .font(.title3)
                             .fontWeight(.semibold)
                     }
-
+                    
                     Spacer()
-
-                    if let direction = nearbyInteractionManager.direction {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("방향")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            DirectionIndicator(direction: direction)
+                }
+            }
+            
+            if showButtons {
+                HStack(spacing: 8) {
+                    if nearbyInteractionManager.isSessionActive {
+                        Button("UWB 중지") {
+                            bluetoothManager.stopUWB(deviceID: device.bleUniqueID)
                         }
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background(.orange.opacity(0.1))
+                        .foregroundColor(.orange)
+                        .cornerRadius(24)
+                    } else {
+                        Button("UWB 시작") {
+                            bluetoothManager.initializeUWB(deviceID: device.bleUniqueID)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .background(.green.opacity(0.1))
+                        .foregroundColor(.green)
+                        .cornerRadius(24)
                     }
                 }
-            } else {
-                Text("위치 정보를 받고 있습니다...")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
         .padding()
-        .background(Color.purple.opacity(0.1))
+        .background(Color(nearbyInteractionManager.isSessionActive ? .purple : .blue).opacity(0.1))
         .cornerRadius(32)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showButtons.toggle()
+            }
+        }
+    }
+    
+    private func bluetoothDistanceText(for device: QorvoDevice) -> String {
+        guard let rssi = device.bleRSSI else {
+            return "근처에 없음"
+        }
+        
+        let rssiValue = rssi.intValue
+        if rssiValue >= -50 {
+            return "매우 가까움"
+        } else if rssiValue >= -70 {
+            return "가까움"
+        } else if rssiValue >= -85 {
+            return "근처에 있음"
+        } else {
+            return "멀리 있음"
+        }
     }
 
     private var noDevicesView: some View {

@@ -62,6 +62,7 @@ class QorvoDevice {
     var blePeripheralStatus: String?
     var bleTimestamp: Int64
     var uwbLocation: Location?
+    var bleRSSI: NSNumber?
     
     init(peripheral: CBPeripheral, uniqueID: Int, peripheralName: String, timeStamp: Int64) {
         self.blePeripheral = peripheral
@@ -69,6 +70,7 @@ class QorvoDevice {
         self.blePeripheralName = peripheralName
         self.blePeripheralStatus = statusDiscovered
         self.bleTimestamp = timeStamp
+        self.bleRSSI = nil
         self.uwbLocation = Location(
             distance: 0,
             direction: SIMD3<Float>(x: 0, y: 0, z: 0),
@@ -84,6 +86,7 @@ class QorvoDevice {
         self.blePeripheralName = ""
         self.blePeripheralStatus = "Saved"
         self.bleTimestamp = 0
+        self.bleRSSI = nil
         self.uwbLocation = Location(
             distance: 0,
             direction: SIMD3<Float>(x: 0, y: 0, z: 0),
@@ -119,6 +122,9 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // Timer for device cleanup
     private var cleanupTimer: Timer?
+    
+    // Timer for RSSI reading
+    private var rssiTimer: Timer?
     
     enum ConnectionStatus: Equatable {
         case disconnected
@@ -253,6 +259,9 @@ class BluetoothManager: NSObject, ObservableObject {
         guard let peripheral = connectedPeripheral else { return }
         centralManager.cancelPeripheralConnection(peripheral)
         
+        // Stop RSSI reading
+        stopRSSIReading()
+        
         connectedPeripheral = nil
         connectionStatus = .disconnected
         uwbActive = false
@@ -370,6 +379,9 @@ extension BluetoothManager: CBCentralManagerDelegate {
         if let deviceIndex = discoveredDevices.firstIndex(where: { $0.blePeripheral === peripheral }) {
             discoveredDevices[deviceIndex].blePeripheralStatus = statusConnected
         }
+        
+        // Start reading RSSI periodically
+        startRSSIReading(for: peripheral)
         
         // Discover services
         peripheral.discoverServices([TransferService.serviceUUID, QorvoNIService.serviceUUID])
@@ -617,6 +629,36 @@ extension BluetoothManager: CBPeripheralDelegate {
             
             // Update discovered devices list
             discoveredDevices.removeAll { $0.bleUniqueID == deviceID }
+        }
+    }
+    
+    // RSSI Reading Methods
+    private func startRSSIReading(for peripheral: CBPeripheral) {
+        stopRSSIReading() // Stop any existing timer
+        
+        rssiTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            peripheral.readRSSI()
+        }
+    }
+    
+    private func stopRSSIReading() {
+        rssiTimer?.invalidate()
+        rssiTimer = nil
+    }
+}
+
+// MARK: - CBPeripheralDelegate Extension for RSSI
+extension BluetoothManager {
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        guard error == nil else {
+            logger.error("Failed to read RSSI: \(error?.localizedDescription ?? "Unknown error")")
+            return
+        }
+        
+        // Update the RSSI value in the corresponding device
+        if let deviceIndex = self.discoveredDevices.firstIndex(where: { $0.blePeripheral === peripheral }) {
+            self.discoveredDevices[deviceIndex].bleRSSI = RSSI
+            self.logger.debug("Updated RSSI for device \(self.discoveredDevices[deviceIndex].blePeripheralName): \(RSSI)")
         }
     }
 }
