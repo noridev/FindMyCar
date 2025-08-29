@@ -649,18 +649,15 @@ struct MapStyleControl: View {
             Button(action: {
                 showingStylePicker = true
             }) {
+                let baseImage = Image(systemName: selectedType.icon)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.primary)
+                    .frame(width: 44, height: 44)
+                
                 if #available(iOS 26.0, *) {
-                    Image(systemName: selectedType.icon)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.primary)
-                        .frame(width: 44, height: 44)
-                        .glassEffect()
+                    baseImage.glassEffect()
                 } else {
-                    Image(systemName: selectedType.icon)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.primary)
-                        .frame(width: 44, height: 44)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    baseImage.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
                 }
             }
         }
