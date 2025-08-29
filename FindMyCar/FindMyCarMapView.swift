@@ -292,7 +292,7 @@ struct DeviceListSheetView: View {
         }
         .padding()
         .background(Color.purple.opacity(0.1))
-        .cornerRadius(12)
+        .cornerRadius(32)
     }
 
     private var noDevicesView: some View {
@@ -406,14 +406,26 @@ struct DeviceCard: View {
                 Spacer()
                 
                 // 거리 정보 (오른쪽)
-                if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
-                    VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
+                        // UWB로 실시간 거리 측정 중
                         Text("\(String(format: "%.0f", location.distance))m")
                             .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary)
                         
                         DirectionIndicator(direction: location.direction)
+                    } else if let savedLocation = LocationStorage.shared.getLastLocation(for: device.bleUniqueID),
+                              let userLocation = CLLocationManager().location?.coordinate {
+                        // 저장된 위치와 현재 위치 간의 거리 계산
+                        let savedCLLocation = CLLocation(latitude: savedLocation.latitude, longitude: savedLocation.longitude)
+                        let currentLocation = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
+                        let distance = savedCLLocation.distance(from: currentLocation)
+                        
+                        Text("\(String(format: "%.0f", distance))m")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -528,7 +540,8 @@ struct DeviceCard: View {
     private func formatTimestamp(_ date: Date) -> String {
         let timeInterval = Date().timeIntervalSince(date)
         
-        if timeInterval < 60 {
+        // 기기가 연결되어 있고 60초 이내인 경우에만 "지금" 표시
+        if timeInterval < 60 && (device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging) {
             return "지금"
         }
         
