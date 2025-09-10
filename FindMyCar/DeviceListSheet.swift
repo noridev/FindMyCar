@@ -194,7 +194,8 @@ struct DeviceListSheet: View {
                     device: device,
                     bluetoothManager: bluetoothManager,
                     nearbyInteractionManager: nearbyInteractionManager,
-                    isSaved: DeviceStorage.shared.isDeviceSaved(device.bleUniqueID)
+                    isSaved: DeviceStorage.shared.isDeviceSaved(device.bleUniqueID),
+                    onVehicleSelected: { _ in }
                 )
             }
         }

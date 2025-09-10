@@ -75,7 +75,10 @@ struct FindMyCarMapView: View {
                     nearbyInteractionManager: nearbyInteractionManager,
                     isScanning: $isScanning,
                     startScanning: startScanning,
-                    stopScanning: stopScanning
+                    stopScanning: stopScanning,
+                    onVehicleSelected: { device in
+                        centerMapOnVehicle(device)
+                    }
                 )
                 .presentationDetents([.height(300), .height(500), .large])
                 .presentationDragIndicator(.visible)
@@ -122,6 +125,19 @@ struct FindMyCarMapView: View {
             )
         }
     }
+    
+    private func centerMapOnVehicle(_ device: QorvoDevice) {
+        guard let savedLocation = LocationStorage.shared.getLastLocation(for: device.bleUniqueID) else {
+            return
+        }
+        
+        withAnimation(.easeInOut(duration: 1.0)) {
+            cameraPosition = .region(MKCoordinateRegion(
+                center: savedLocation,
+                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            ))
+        }
+    }
 }
 
 struct DeviceListSheetView: View {
@@ -130,6 +146,7 @@ struct DeviceListSheetView: View {
     @Binding var isScanning: Bool
     let startScanning: () -> Void
     let stopScanning: () -> Void
+    let onVehicleSelected: (QorvoDevice) -> Void
     @Environment(\.dismiss) var dismiss
     @State private var showButtons: Bool = false
 
@@ -383,7 +400,8 @@ struct DeviceListSheetView: View {
                             device: device,
                             bluetoothManager: bluetoothManager,
                             nearbyInteractionManager: nearbyInteractionManager,
-                            isSaved: true
+                            isSaved: true,
+                            onVehicleSelected: onVehicleSelected
                         )
                     }
                 }
@@ -404,7 +422,8 @@ struct DeviceListSheetView: View {
                             device: device,
                             bluetoothManager: bluetoothManager,
                             nearbyInteractionManager: nearbyInteractionManager,
-                            isSaved: false
+                            isSaved: false,
+                            onVehicleSelected: onVehicleSelected
                         )
                     }
                 }
@@ -418,6 +437,7 @@ struct DeviceCard: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
     let isSaved: Bool
+    let onVehicleSelected: (QorvoDevice) -> Void
     @State private var currentAddress: String = ""
     @State private var showButtons: Bool = false
 
@@ -500,7 +520,16 @@ struct DeviceCard: View {
                     deviceActionButton
                         .frame(maxWidth: .infinity, minHeight: 36)
                     
-                    if isSaved {
+                    if isSaved && LocationStorage.shared.getLastLocation(for: device.bleUniqueID) != nil {
+                        Text("지도에서 보기")
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(.green.opacity(0.1))
+                            .foregroundColor(.green)
+                            .cornerRadius(24)
+                            .onTapGesture {
+                                onVehicleSelected(device)
+                            }
+                        
                         Text("차량 삭제")
                             .frame(maxWidth: .infinity, minHeight: 36)
                             .background(.red.opacity(0.1))
@@ -509,7 +538,7 @@ struct DeviceCard: View {
                             .onTapGesture {
                                 bluetoothManager.removeSavedDevice(device.bleUniqueID)
                             }
-                    } else if device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging {
+                    } else if !isSaved && (device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging) {
                         Text("차량 등록")
                             .frame(maxWidth: .infinity, minHeight: 36)
                             .background(.blue.opacity(0.1))
@@ -517,6 +546,15 @@ struct DeviceCard: View {
                             .cornerRadius(24)
                             .onTapGesture {
                                 bluetoothManager.saveCurrentDevice(device)
+                            }
+                    } else if isSaved {
+                        Text("차량 삭제")
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .background(.red.opacity(0.1))
+                            .foregroundColor(.red)
+                            .cornerRadius(24)
+                            .onTapGesture {
+                                bluetoothManager.removeSavedDevice(device.bleUniqueID)
                             }
                     }
                 }
