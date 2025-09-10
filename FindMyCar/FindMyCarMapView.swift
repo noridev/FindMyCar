@@ -686,20 +686,10 @@ struct DeviceAnnotation {
 struct CarAnnotationView: View {
     let device: QorvoDevice
     let bluetoothManager: BluetoothManager
-    @State private var isAnimating = false
     @State private var currentStatus: String = ""
 
     var body: some View {
         ZStack {
-            if currentStatus == statusRanging {
-                Circle()
-                    .stroke(statusColor, lineWidth: 2)
-                    .frame(width: 70, height: 70)
-                    .scaleEffect(isAnimating ? 1.2 : 1.0)
-                    .opacity(isAnimating ? 0.0 : 0.8)
-                    .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: false), value: isAnimating)
-            }
-            
             Circle()
                 .fill(statusColor.opacity(0.3))
                 .frame(width: 60, height: 60)
@@ -726,12 +716,6 @@ struct CarAnnotationView: View {
             currentStatus = currentDevice.blePeripheralStatus ?? ""
         } else {
             currentStatus = device.blePeripheralStatus ?? ""
-        }
-
-        if currentStatus == statusRanging {
-            isAnimating = true
-        } else {
-            isAnimating = false
         }
 
         print("Device \(device.blePeripheralName) updated status: \(currentStatus)")
