@@ -507,6 +507,12 @@ struct DeviceCard: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
+                // 저장된 차량이고 위치 정보가 있으면 지도로 이동
+                if isSaved && LocationStorage.shared.getLastLocation(for: device.bleUniqueID) != nil {
+                    onVehicleSelected(device)
+                }
+                
+                // 모든 차량에 대해 버튼 토글
                 withAnimation(.easeInOut(duration: 0.3)) {
                     showButtons.toggle()
                 }
@@ -520,16 +526,7 @@ struct DeviceCard: View {
                     deviceActionButton
                         .frame(maxWidth: .infinity, minHeight: 36)
                     
-                    if isSaved && LocationStorage.shared.getLastLocation(for: device.bleUniqueID) != nil {
-                        Text("지도에서 보기")
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                            .background(.green.opacity(0.1))
-                            .foregroundColor(.green)
-                            .cornerRadius(24)
-                            .onTapGesture {
-                                onVehicleSelected(device)
-                            }
-                        
+                    if isSaved {
                         Text("차량 삭제")
                             .frame(maxWidth: .infinity, minHeight: 36)
                             .background(.red.opacity(0.1))
@@ -546,15 +543,6 @@ struct DeviceCard: View {
                             .cornerRadius(24)
                             .onTapGesture {
                                 bluetoothManager.saveCurrentDevice(device)
-                            }
-                    } else if isSaved {
-                        Text("차량 삭제")
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                            .background(.red.opacity(0.1))
-                            .foregroundColor(.red)
-                            .cornerRadius(24)
-                            .onTapGesture {
-                                bluetoothManager.removeSavedDevice(device.bleUniqueID)
                             }
                     }
                 }
