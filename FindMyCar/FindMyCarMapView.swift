@@ -636,32 +636,42 @@ struct DeviceCard: View {
     
     private func reverseGeocode(location: CLLocation, completion: @escaping (String) -> Void) {
         let geocoder = CLGeocoder()
-        geocoder.reverseGeocodeLocation(location) { placemarks, error in
-            if let error = error {
-                print("Reverse geocoding failed: \(error.localizedDescription)")
-                completion("")
-                return
+        
+        // 백그라운드에서 지오코딩 실행
+        DispatchQueue.global(qos: .utility).async {
+            geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                if let error = error {
+                    print("Reverse geocoding failed: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        completion("")
+                    }
+                    return
+                }
+                
+                guard let placemark = placemarks?.first else {
+                    DispatchQueue.main.async {
+                        completion("")
+                    }
+                    return
+                }
+                
+                var addressComponents: [String] = []
+                
+                if let locality = placemark.locality {
+                    addressComponents.append(locality)
+                }
+                if let thoroughfare = placemark.thoroughfare {
+                    addressComponents.append(thoroughfare)
+                }
+                if let subThoroughfare = placemark.subThoroughfare {
+                    addressComponents.append(subThoroughfare)
+                }
+                
+                let address = addressComponents.joined(separator: " ")
+                DispatchQueue.main.async {
+                    completion(address.isEmpty ? "위치 정보 없음" : address)
+                }
             }
-            
-            guard let placemark = placemarks?.first else {
-                completion("")
-                return
-            }
-            
-            var addressComponents: [String] = []
-            
-            if let locality = placemark.locality {
-                addressComponents.append(locality)
-            }
-            if let thoroughfare = placemark.thoroughfare {
-                addressComponents.append(thoroughfare)
-            }
-            if let subThoroughfare = placemark.subThoroughfare {
-                addressComponents.append(subThoroughfare)
-            }
-            
-            let address = addressComponents.joined(separator: " ")
-            completion(address.isEmpty ? "위치 정보 없음" : address)
         }
     }
 }

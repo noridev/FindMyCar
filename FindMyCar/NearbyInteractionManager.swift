@@ -23,6 +23,15 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
     private var selectedDeviceID: Int = -1
     private let locationManager = CLLocationManager()
     
+    // 위치 업데이트 최적화를 위한 속성들
+    private let backgroundQueue = DispatchQueue(label: "location-update-queue", qos: .utility)
+    private var lastSavedLocations: [Int: CLLocationCoordinate2D] = [:]
+    private let minimumDistanceForSave: Double = 5.0 // 5미터 이상 이동했을 때만 저장
+    
+    // UI 업데이트 디바운싱을 위한 속성들
+    private var lastUIUpdateTime: Date = Date()
+    private let uiUpdateInterval: TimeInterval = 0.2 // 초당 5회로 제한 (200ms)
+    
     enum SessionStatus: Equatable {
         case idle
         case starting
@@ -166,36 +175,44 @@ extension NearbyInteractionManager: NISessionDelegate {
             return
         }
         
-        // Update the UI with new measurements
-        DispatchQueue.main.async {
-            if let distance = nearbyObject.distance {
-                self.distance = distance
+        // UI 업데이트 디바운싱 적용
+        let now = Date()
+        let shouldUpdateUI = now.timeIntervalSince(lastUIUpdateTime) >= uiUpdateInterval
+        
+        if shouldUpdateUI {
+            // Update the UI with new measurements
+            DispatchQueue.main.async {
+                if let distance = nearbyObject.distance {
+                    self.distance = distance
+                }
+                
+                if let direction = nearbyObject.direction {
+                    self.direction = direction
+                }
+                
+                // Handle elevation if available
+                switch nearbyObject.verticalDirectionEstimate {
+                case .same:
+                    self.elevation = 0
+                case .above:
+                    self.elevation = 1
+                case .below:
+                    self.elevation = -1
+                case .aboveOrBelow:
+                    self.elevation = 0
+                case .unknown:
+                    self.elevation = nil
+                @unknown default:
+                    self.elevation = nil
+                }
+                
+                self.lastUpdate = Date()
             }
             
-            if let direction = nearbyObject.direction {
-                self.direction = direction
-            }
-            
-            // Handle elevation if available
-            switch nearbyObject.verticalDirectionEstimate {
-            case .same:
-                self.elevation = 0
-            case .above:
-                self.elevation = 1
-            case .below:
-                self.elevation = -1
-            case .aboveOrBelow:
-                self.elevation = 0
-            case .unknown:
-                self.elevation = nil
-            @unknown default:
-                self.elevation = nil
-            }
-            
-            self.lastUpdate = Date()
+            lastUIUpdateTime = now
         }
         
-        // Update device location in bluetooth manager and save location
+        // Update device location in bluetooth manager (always update, not throttled)
         if let deviceIndex = bluetoothManager.discoveredDevices.firstIndex(where: { 
             niSessions[$0.bleUniqueID] === session 
         }) {
@@ -205,9 +222,9 @@ extension NearbyInteractionManager: NISessionDelegate {
             device.uwbLocation?.elevation = nearbyObject.verticalDirectionEstimate.rawValue
             device.uwbLocation?.noUpdate = false
             
-            // Save current location when device is being tracked
+            // Save current location when device is being tracked (optimized)
             if let currentLocation = locationManager.location?.coordinate {
-                LocationStorage.shared.saveLocation(deviceID: device.bleUniqueID, coordinate: currentLocation)
+                saveLocationOptimized(deviceID: device.bleUniqueID, coordinate: currentLocation)
             }
         }
         
@@ -314,6 +331,30 @@ extension NearbyInteractionManager: NISessionDelegate {
         logger.info("Sending shareable configuration bytes: \(dataString)")
         
         bluetoothManager.sendDataToAccessory(msg, deviceID: deviceID)
+    }
+    
+    // MARK: - 위치 저장 최적화
+    private func saveLocationOptimized(deviceID: Int, coordinate: CLLocationCoordinate2D) {
+        backgroundQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            // 이전 위치와 비교하여 최소 거리 이상 이동했을 때만 저장
+            if let lastLocation = self.lastSavedLocations[deviceID] {
+                let lastCLLocation = CLLocation(latitude: lastLocation.latitude, longitude: lastLocation.longitude)
+                let currentCLLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                let distance = lastCLLocation.distance(from: currentCLLocation)
+                
+                if distance < self.minimumDistanceForSave {
+                    return // 최소 거리 이하이면 저장하지 않음
+                }
+            }
+            
+            // 위치 저장
+            LocationStorage.shared.saveLocation(deviceID: deviceID, coordinate: coordinate)
+            self.lastSavedLocations[deviceID] = coordinate
+            
+            self.logger.debug("Location saved for device \(deviceID) - optimized")
+        }
     }
 }
 
