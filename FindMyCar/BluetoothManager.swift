@@ -119,6 +119,8 @@ class BluetoothManager: NSObject, ObservableObject {
     private var bluetoothReady = false
     private var shouldStartWhenReady = false
     private var pendingConnectionDeviceID: Int?
+    private var isAutoConnectScanning = false  // 자동 연결을 위한 스캔인지 구분
+    private var manuallyDisconnected = false   // 사용자가 수동으로 연결 해제했는지 표시
     
     // Timer for device cleanup
     private var cleanupTimer: Timer?
@@ -204,8 +206,13 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     func startScanning() {
+        startScanning(isAutoConnect: false)
+    }
+    
+    private func startScanning(isAutoConnect: Bool = false) {
         if bluetoothReady {
             isScanning = true
+            isAutoConnectScanning = isAutoConnect
             connectionStatus = .scanning
             
             centralManager.scanForPeripherals(
@@ -213,7 +220,7 @@ class BluetoothManager: NSObject, ObservableObject {
                 options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
             )
             
-            logger.info("Scanning started.")
+            logger.info("Scanning started (auto-connect: \(isAutoConnect)).")
         } else {
             shouldStartWhenReady = true
         }
@@ -222,6 +229,7 @@ class BluetoothManager: NSObject, ObservableObject {
     func stopScanning() {
         centralManager.stopScan()
         isScanning = false
+        isAutoConnectScanning = false
         if connectionStatus == .scanning {
             connectionStatus = .disconnected
         }
@@ -237,6 +245,9 @@ class BluetoothManager: NSObject, ObservableObject {
             logger.error("Device with uniqueID \(uniqueID) not found")
             return
         }
+        
+        // Reset manual disconnect flag when user manually connects
+        manuallyDisconnected = false
         
         logger.info("Connecting to peripheral: \(deviceToConnect.blePeripheralName)")
         connectionStatus = .connecting
@@ -262,9 +273,19 @@ class BluetoothManager: NSObject, ObservableObject {
         // Stop RSSI reading
         stopRSSIReading()
         
+        // Stop any ongoing scanning
+        if isScanning {
+            stopScanning()
+        }
+        
         connectedPeripheral = nil
         connectionStatus = .disconnected
         uwbActive = false
+        
+        // Mark as manually disconnected to prevent auto-reconnect
+        manuallyDisconnected = true
+        
+        logger.info("Manual disconnect - auto-reconnect disabled until app restart")
     }
     
     public func sendDataToAccessory(_ data: Data, deviceID: Int) {
@@ -341,6 +362,12 @@ extension BluetoothManager: CBCentralManagerDelegate {
         
         logger.info("Discovered peripheral: \(deviceName) with RSSI: \(RSSI)")
         
+        // 자동 연결 모드에서는 저장된 디바이스만 처리
+        if isAutoConnectScanning && !DeviceStorage.shared.isDeviceSaved(uniqueID) {
+            logger.info("Auto-connect mode: ignoring non-saved device \(deviceName)")
+            return
+        }
+        
         // Check if device already exists, if so update timestamp
         if let existingDeviceIndex = discoveredDevices.firstIndex(where: { $0.bleUniqueID == uniqueID }) {
             discoveredDevices[existingDeviceIndex].bleTimestamp = timeStamp
@@ -366,11 +393,12 @@ extension BluetoothManager: CBCentralManagerDelegate {
             pendingConnectionDeviceID = nil
             connectPeripheral(uniqueID)
         }
-        // 마지막 연결 디바이스가 아니지만 저장된 디바이스가 발견된 경우에도 자동 연결 시도
-        else if DeviceStorage.shared.isDeviceSaved(uniqueID) && 
-                 connectionStatus == .disconnected && 
-                 !isScanning {
-            logger.info("Found saved device, attempting to auto-connect")
+        // 자동 연결 모드에서 저장된 디바이스가 발견된 경우 자동 연결 시도
+        else if isAutoConnectScanning && 
+                 DeviceStorage.shared.isDeviceSaved(uniqueID) && 
+                 connectionStatus == .disconnected {
+            logger.info("Auto-connect mode: Found saved device, attempting to connect")
+            stopScanning()
             connectPeripheral(uniqueID)
         }
     }
@@ -605,7 +633,12 @@ extension BluetoothManager: CBPeripheralDelegate {
     }
     
     private func attemptAutoConnect() {
-        guard bluetoothReady && !isScanning else { return }
+        guard bluetoothReady && !isScanning && !manuallyDisconnected else { 
+            if manuallyDisconnected {
+                logger.info("Auto-connect skipped - manually disconnected")
+            }
+            return
+        }
         
         // Try to connect to the last connected device first
         if let lastConnectedDeviceID = DeviceStorage.shared.getLastConnectedDevice() {
@@ -617,7 +650,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                 return
             } else {
                 // Start scanning to find the last connected device
-                startScanning()
+                startScanning(isAutoConnect: true)
                 pendingConnectionDeviceID = lastConnectedDeviceID
                 
                 // Stop auto-scan after 15 seconds if device not found
@@ -638,6 +671,11 @@ extension BluetoothManager: CBPeripheralDelegate {
     }
     
     private func attemptConnectToAnySavedDevice() {
+        guard !manuallyDisconnected else {
+            logger.info("Auto-connect to saved devices skipped - manually disconnected")
+            return
+        }
+        
         let savedDevices = DeviceStorage.shared.savedDevices
         guard !savedDevices.isEmpty else { return }
         
@@ -645,7 +683,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         
         // Start scanning to find saved devices
         if !isScanning {
-            startScanning()
+            startScanning(isAutoConnect: true)
         }
         
         // Stop auto-scan after 10 seconds
