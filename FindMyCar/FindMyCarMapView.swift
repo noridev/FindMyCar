@@ -7,11 +7,12 @@ struct FindMyCarMapView: View {
     @StateObject private var nearbyInteractionManager: NearbyInteractionManager
     @StateObject private var locationManager = LocationManager()
     
-    @State private var cameraPosition: MapCameraPosition = .automatic
+    @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
     @State private var showingDeviceList = false
     @State private var isScanning = false
     @State private var scanTimer: Timer?
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
+    @State private var hasInitializedCamera = false
     
     init() {
         let bluetoothManager = BluetoothManager()
@@ -41,19 +42,12 @@ struct FindMyCarMapView: View {
                 .foregroundStyle(Color.secondary)
                 .onAppear {
                     locationManager.requestLocationPermission()
-                    if let userLocation = locationManager.userLocation {
+                    if !hasInitializedCamera, let userLocation = locationManager.userLocation {
                         cameraPosition = .region(MKCoordinateRegion(
                             center: userLocation,
-                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                            span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
                         ))
-                    }
-                }
-                .onReceive(locationManager.$userLocation) { userLocation in
-                    if let userLocation = userLocation {
-                        cameraPosition = .region(MKCoordinateRegion(
-                            center: userLocation,
-                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                        ))
+                        hasInitializedCamera = true
                     }
                 }
             }
