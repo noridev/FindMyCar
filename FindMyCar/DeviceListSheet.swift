@@ -94,8 +94,10 @@ struct DeviceListSheet: View {
             
             if nearbyInteractionManager.isSessionActive {
                 activeSessionCard
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: nearbyInteractionManager.isSessionActive)
     }
     
     private var connectionStatusIndicator: some View {

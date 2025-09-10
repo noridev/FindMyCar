@@ -237,8 +237,10 @@ struct DeviceListSheetView: View {
 
             if let connectedDevice = bluetoothManager.discoveredDevices.first(where: { $0.blePeripheralStatus == statusConnected || $0.blePeripheralStatus == statusRanging }) {
                 activeSessionCard(for: connectedDevice)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: bluetoothManager.discoveredDevices.first(where: { $0.blePeripheralStatus == statusConnected || $0.blePeripheralStatus == statusRanging }) != nil)
     }
 
     private var connectionStatusIndicator: some View {
