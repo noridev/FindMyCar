@@ -317,6 +317,11 @@ class BluetoothManager: NSObject, ObservableObject {
         sendDataToAccessory(message, deviceID: deviceID)
         logger.info("Sent UWB stop command")
         uwbActive = false
+        
+        // Clear UWB location data when UWB is stopped
+        if let deviceIndex = discoveredDevices.firstIndex(where: { $0.bleUniqueID == deviceID }) {
+            discoveredDevices[deviceIndex].uwbLocation?.noUpdate = true
+        }
     }
 }
 
@@ -445,6 +450,8 @@ extension BluetoothManager: CBCentralManagerDelegate {
             discoveredDevices[deviceIndex].blePeripheralStatus = statusDiscovered
             discoveredDevices[deviceIndex].rxCharacteristic = nil
             discoveredDevices[deviceIndex].txCharacteristic = nil
+            // Clear UWB location data when disconnected
+            discoveredDevices[deviceIndex].uwbLocation?.noUpdate = true
         }
         
         if let error = error {
@@ -584,9 +591,10 @@ extension BluetoothManager: CBPeripheralDelegate {
                 self.delegate?.bluetoothManager(self, uwbDidStart: false, deviceID: deviceID)
             }
             
-            // Update device status back to connected
+            // Update device status back to connected and clear UWB location data
             if let deviceIndex = discoveredDevices.firstIndex(where: { $0.bleUniqueID == deviceID }) {
                 discoveredDevices[deviceIndex].blePeripheralStatus = statusConnected
+                discoveredDevices[deviceIndex].uwbLocation?.noUpdate = true
             }
             
         default:
