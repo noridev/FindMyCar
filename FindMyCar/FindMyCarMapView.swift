@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import simd
 
 struct FindMyCarMapView: View {
     @StateObject private var bluetoothManager = BluetoothManager()
@@ -735,6 +736,21 @@ struct CarAnnotationView: View {
             print("Status: Default -> Gray")
             return .gray
         }
+    }
+}
+
+struct DirectionIndicator: View {
+    let direction: simd_float3
+    
+    var body: some View {
+        // UWB 방향 벡터를 화면 좌표계에 맞게 변환
+        // direction.x: 오른쪽이 양수, direction.z: 뒤쪽이 양수일 수 있음
+        let angle = atan2(direction.x, -direction.z) * 180 / .pi
+        
+        Image(systemName: "arrow.up.circle.fill")
+            .font(.system(size: 16))
+            .foregroundColor(.purple)
+            .rotationEffect(.degrees(Double(angle)))
     }
 }
 
