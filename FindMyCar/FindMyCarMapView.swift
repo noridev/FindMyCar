@@ -220,7 +220,7 @@ struct DeviceListSheetView: View {
                         .font(.headline)
                         .fontWeight(.semibold)
 
-                    Text("디바이스 연결 및 추적")
+                    Text("차량 연결 및 추적")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -367,11 +367,11 @@ struct DeviceListSheetView: View {
                 .font(.system(size: 40))
                 .foregroundColor(.secondary)
 
-            Text("디바이스가 발견되지 않았습니다")
+            Text("차량이 발견되지 않았습니다.")
                 .font(.headline)
                 .multilineTextAlignment(.center)
 
-            Text("Bluetooth를 켜고 스캔을 시작해주세요")
+            Text("Bluetooth를 켜고 스캔을 시작해주세요.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
