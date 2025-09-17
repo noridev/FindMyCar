@@ -12,7 +12,8 @@ import NearbyInteraction
 struct ContentView: View {
     @StateObject private var bluetoothManager = BluetoothManager()
     @StateObject private var nearbyInteractionManager: NearbyInteractionManager
-    
+    @Environment(\.scenePhase) private var scenePhase
+
     init() {
         let bluetoothManager = BluetoothManager()
         self._bluetoothManager = StateObject(wrappedValue: bluetoothManager)
@@ -66,6 +67,50 @@ struct ContentView: View {
             }
             .navigationTitle("Find My Car")
             .navigationBarTitleDisplayMode(.inline)
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            switch newPhase {
+            case .active:
+                handleAppBecameActive()
+            case .background, .inactive:
+                break
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func handleAppBecameActive() {
+        // 앱이 포그라운드로 돌아올 때 자동 재연결 시도
+        if bluetoothManager.connectionStatus == .disconnected &&
+           !bluetoothManager.isScanning &&
+           bluetoothManager.connectedPeripheral == nil {
+
+            // 저장된 디바이스가 있으면 자동 재연결 시도
+            if DeviceStorage.shared.savedDevices.count > 0 {
+                print("App became active - attempting auto-reconnect")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.bluetoothManager.attemptAutoConnectOnForeground()
+                }
+            }
+        }
+
+        if bluetoothManager.connectedPeripheral != nil && bluetoothManager.uwbActive {
+            if !nearbyInteractionManager.isSessionActive {
+                print("App became active - UWB session inactive, restarting")
+                nearbyInteractionManager.forceRestartSession()
+            } else if nearbyInteractionManager.sessionStatus == .paused {
+                print("App became active - UWB session paused, force restarting")
+                nearbyInteractionManager.forceRestartSession()
+            } else if nearbyInteractionManager.distance == nil && nearbyInteractionManager.direction == nil {
+                print("App became active - UWB session active but no data, force restarting")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    if self.nearbyInteractionManager.distance == nil && self.nearbyInteractionManager.direction == nil {
+                        print("Still no UWB data after 2 seconds, forcing restart")
+                        self.nearbyInteractionManager.forceRestartSession()
+                    }
+                }
+            }
         }
     }
 }

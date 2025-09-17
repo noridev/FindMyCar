@@ -640,11 +640,19 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
     }
     
-    private func attemptAutoConnect() {
-        guard bluetoothReady && !isScanning && !manuallyDisconnected else { 
-            if manuallyDisconnected {
-                logger.info("Auto-connect skipped - manually disconnected")
-            }
+    func attemptAutoConnect() {
+        attemptAutoConnect(ignoreManualDisconnect: false)
+    }
+
+    func attemptAutoConnectOnForeground() {
+        attemptAutoConnect(ignoreManualDisconnect: true)
+    }
+
+    private func attemptAutoConnect(ignoreManualDisconnect: Bool = false) {
+        guard bluetoothReady && !isScanning else { return }
+
+        if !ignoreManualDisconnect && manuallyDisconnected {
+            logger.info("Auto-connect skipped - manually disconnected")
             return
         }
         

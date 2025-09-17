@@ -31,6 +31,11 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
     // UI 업데이트 디바운싱을 위한 속성들
     private var lastUIUpdateTime: Date = Date()
     private let uiUpdateInterval: TimeInterval = 0.2 // 초당 5회로 제한 (200ms)
+
+    // UWB 데이터 감시를 위한 속성들
+    private var lastDataReceiveTime: Date?
+    private var dataMonitorTimer: Timer?
+    private let maxDataInterval: TimeInterval = 5.0 // 5초간 데이터가 없으면 재시작
     
     enum SessionStatus: Equatable {
         case idle
@@ -63,6 +68,7 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
     deinit {
         niSessions.values.forEach { $0.invalidate() }
         niSessions.removeAll()
+        stopDataMonitoring()
     }
     
     func startSession() {
@@ -77,7 +83,8 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
         niSessions.values.forEach { $0.invalidate() }
         niSessions.removeAll()
         configurations.removeAll()
-        
+        stopDataMonitoring()
+
         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
             isSessionActive = false
         }
@@ -85,8 +92,49 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
         distance = nil
         direction = nil
         elevation = nil
-        
+
         logger.info("All NI sessions stopped")
+    }
+
+    func forceRestartSession() {
+        logger.info("Force restarting UWB session")
+
+        // 기존 세션들을 정리
+        niSessions.values.forEach { $0.invalidate() }
+        niSessions.removeAll()
+
+        // 저장된 configuration을 사용해서 새 세션 시작
+        for (deviceID, configuration) in configurations {
+            let session = NISession()
+            session.delegate = self
+            niSessions[deviceID] = session
+
+            do {
+                session.run(configuration)
+                logger.info("Restarted NI session for device \(deviceID)")
+
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    isSessionActive = true
+                }
+                sessionStatus = .running
+                selectedDeviceID = deviceID
+                startDataMonitoring() // 데이터 모니터링 시작
+
+            } catch {
+                logger.error("Failed to restart NI session: \(error)")
+                sessionStatus = .failed(error)
+            }
+        }
+
+        if configurations.isEmpty {
+            logger.warning("No configurations available for restart - requesting new UWB initialization")
+            // 설정이 없으면 블루투스 매니저에게 UWB 재초기화 요청
+            if let connectedDeviceID = bluetoothManager.discoveredDevices.first(where: {
+                $0.blePeripheralStatus == statusRanging || $0.blePeripheralStatus == statusConnected
+            })?.bleUniqueID {
+                bluetoothManager.initializeUWB(deviceID: connectedDeviceID)
+            }
+        }
     }
     
     private func setupAccessory(_ configData: Data, deviceID: Int) {
@@ -110,7 +158,8 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
             }
             sessionStatus = .running
             selectedDeviceID = deviceID
-            
+            startDataMonitoring() // 데이터 모니터링 시작
+
             logger.info("NI session started successfully for device \(deviceID)")
             
         } catch {
@@ -172,9 +221,15 @@ extension NearbyInteractionManager {
 extension NearbyInteractionManager: NISessionDelegate {
     func session(_ session: NISession, didUpdate nearbyObjects: [NINearbyObject]) {
         guard let nearbyObject = nearbyObjects.first else {
+            logger.warning("NISession didUpdate called but no nearby objects")
             return
         }
-        
+
+        logger.info("NISession didUpdate - Distance: \(nearbyObject.distance?.description ?? "nil"), Direction: \(nearbyObject.direction?.debugDescription ?? "nil")")
+
+        // 데이터 수신 시간 업데이트
+        updateLastDataReceiveTime()
+
         // UI 업데이트 디바운싱 적용
         let now = Date()
         let shouldUpdateUI = now.timeIntervalSince(lastUIUpdateTime) >= uiUpdateInterval
@@ -312,6 +367,15 @@ extension NearbyInteractionManager: NISessionDelegate {
             self.sessionStatus = .running
         }
         logger.info("NI Session suspension ended")
+
+        // 세션이 일시정지에서 재개된 후 2초 후에도 데이터가 없으면 강제 재시작
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self = self else { return }
+            if self.distance == nil && self.direction == nil && self.sessionStatus == .running {
+                self.logger.info("Session resumed but no data received - force restarting")
+                self.forceRestartSession()
+            }
+        }
     }
     
     func session(_ session: NISession, didGenerateShareableConfigurationData shareableConfigurationData: Data, for object: NINearbyObject) {
@@ -355,6 +419,43 @@ extension NearbyInteractionManager: NISessionDelegate {
             
             self.logger.debug("Location saved for device \(deviceID) - optimized")
         }
+    }
+
+    // MARK: - UWB 데이터 모니터링
+    private func startDataMonitoring() {
+        stopDataMonitoring() // 기존 타이머 정리
+
+        dataMonitorTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.checkDataHealth()
+        }
+
+        logger.info("Started UWB data monitoring")
+    }
+
+    private func stopDataMonitoring() {
+        dataMonitorTimer?.invalidate()
+        dataMonitorTimer = nil
+        logger.info("Stopped UWB data monitoring")
+    }
+
+    private func checkDataHealth() {
+        guard isSessionActive && sessionStatus == .running else { return }
+
+        if let lastReceive = lastDataReceiveTime {
+            let timeSinceLastData = Date().timeIntervalSince(lastReceive)
+            if timeSinceLastData > maxDataInterval {
+                logger.warning("No UWB data received for \(timeSinceLastData) seconds - force restarting")
+                forceRestartSession()
+            }
+        } else if isSessionActive {
+            // 세션은 활성화되었지만 한 번도 데이터를 받지 못한 경우
+            logger.warning("UWB session active but no data ever received - force restarting")
+            forceRestartSession()
+        }
+    }
+
+    private func updateLastDataReceiveTime() {
+        lastDataReceiveTime = Date()
     }
 }
 
