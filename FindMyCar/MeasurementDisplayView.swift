@@ -90,11 +90,13 @@ struct MeasurementDisplayView: View {
         guard let distance = nearbyInteractionManager.distance else {
             return "No Distance"
         }
-        
+
         if distance < 0.5 {
             return "\(Int(distance * 100)) cm"
         } else if distance < 100 {
             return String(format: "%.1f m", distance)
+        } else if distance >= 1000 {
+            return String(format: "%.1f km", distance / 1000)
         } else {
             return "\(Int(distance)) m"
         }
