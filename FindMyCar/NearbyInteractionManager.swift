@@ -1,3 +1,10 @@
+//
+//  NearbyInteractionManager.swift
+//  FindMyCar
+//
+//  Created by NoriDev on 8/27/25.
+//
+
 import Foundation
 import NearbyInteraction
 import Combine

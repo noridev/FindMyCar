@@ -1,3 +1,10 @@
+//
+//  LocationManager.swift
+//  FindMyCar
+//
+//  Created by NoriDev on 8/27/25.
+//
+
 import Foundation
 import CoreLocation
 import Combine
