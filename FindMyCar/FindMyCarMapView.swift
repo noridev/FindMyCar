@@ -558,7 +558,7 @@ struct DeviceCard: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     // UWB 활성화 시 정확한 거리와 방향 표시
                     if let location = device.uwbLocation, !location.noUpdate, location.distance > 0 {
-                        Text("\(String(format: "%.0f", location.distance))m")
+                        Text(formatDistance(Double(location.distance)))
                             .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundColor(.primary)
@@ -579,7 +579,7 @@ struct DeviceCard: View {
                         let currentLocation = CLLocation(latitude: userLocation.latitude, longitude: userLocation.longitude)
                         let distance = savedCLLocation.distance(from: currentLocation)
                         
-                        Text("\(String(format: "%.0f", distance))m")
+                        Text(formatDistance(distance))
                             .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundColor(.secondary)
@@ -995,11 +995,20 @@ struct MapStyleSheet: View {
 }
 
 // MARK: - Helper Functions
+func formatDistance(_ distance: Double) -> String {
+    if distance >= 1000 {
+        let kilometers = distance / 1000
+        return String(format: "%.1fkm", kilometers)
+    } else {
+        return String(format: "%.0fm", distance)
+    }
+}
+
 func bluetoothDistanceText(for device: QorvoDevice) -> String {
     guard let rssi = device.bleRSSI else {
         return "근처에 없음"
     }
-    
+
     let rssiValue = rssi.intValue
     if rssiValue >= -50 {
         return "매우 가까움"
