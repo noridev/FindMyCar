@@ -93,7 +93,11 @@ struct FindMyCarMapView: View {
                         centerMapOnVehicle(device)
                     }
                 )
-                .presentationDetents([.height(300), .height(500), .large])
+                .presentationDetents([
+                    .height(300),
+                    .height(500),
+                    .large
+                ])
                 .presentationDragIndicator(.visible)
                 .presentationBackgroundInteraction(.enabled)
                 .interactiveDismissDisabled()
@@ -256,7 +260,7 @@ struct DeviceListSheetView: View {
             Image(systemName: isScanning ? "stop" : "plus")
                 .font(.system(size: 18, weight: .medium))
         }
-        .disabled(bluetoothManager.isScanning && !isScanning)
+        .disabled(false)
     }
 
     private var deviceListView: some View {
@@ -287,7 +291,7 @@ struct DeviceListSheetView: View {
                 ProgressView()
                     .scaleEffect(1.0)
 
-                Text("기기 검색 중...")
+                Text("차량 검색 중...")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -353,7 +357,7 @@ struct DeviceListSheetView: View {
                 HStack {
                     Image(systemName: "location.circle.fill")
                         .foregroundColor(nearbyInteractionManager.isSessionActive ? .purple : .blue)
-                    Text("활성 추적")
+                    Text("차량 찾기")
                         .font(.headline)
                         .fontWeight(.medium)
                     Spacer()
@@ -388,7 +392,7 @@ struct DeviceListSheetView: View {
                         }
                     }
                 } else {
-                    Text("위치 정보를 받고 있습니다...")
+                    Text("위치 정보 수신 중")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -916,7 +920,10 @@ struct MapStyleControl: View {
                 selectedType: $selectedType,
                 selectedStyle: $selectedStyle
             )
-            .presentationDetents([.height(280)])
+            .presentationDetents([
+                .height(300),
+                .height(380),
+            ])
             .presentationDragIndicator(.visible)
         }
     }
@@ -929,20 +936,23 @@ struct MapStyleSheet: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                VStack(spacing: 24) {
+            ScrollView {
+                VStack(spacing: 16) {
                     ForEach(MapStyleType.allCases, id: \.self) { styleType in
                         Button(action: {
                             selectedType = styleType
                             selectedStyle = styleType.mapStyle
-                            dismiss()
                         }) {
-                            HStack(spacing: 16) {
-                                Image(systemName: styleType.icon)
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.primary)
-                                    .frame(width: 40, height: 40)
-                                    .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 8))
+                            HStack {
+                                ZStack {
+                                    Circle()
+                                        .fill(.primary.opacity(0.15))
+                                        .frame(width: 48, height: 48)
+                                    
+                                    Image(systemName: styleType.icon)
+                                        .font(.system(size: 24, weight: .medium))
+                                        .foregroundColor(.primary)
+                                }
                                 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(styleType.rawValue)
@@ -961,24 +971,24 @@ struct MapStyleSheet: View {
                                         .foregroundColor(.blue)
                                 }
                             }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
+                            .padding()
                             .background(selectedType == styleType ? Color.blue.opacity(0.1) : Color.clear)
-                            .cornerRadius(12)
+                            .cornerRadius(32)
                         }
                         .buttonStyle(PlainButtonStyle())
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                
-                Spacer()
+                .padding()
             }
             .navigationTitle("지도 스타일")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(trailing: Button("완료") {
-                dismiss()
-            })
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("완료") {
+                        dismiss()
+                    }
+                }
+            }
         }
     }
     
