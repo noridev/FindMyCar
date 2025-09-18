@@ -36,8 +36,7 @@ struct FindMyCarMapView: View {
                     }
 
                     if let route = routeToVehicle, showingRoute {
-                        MapPolyline(route.polyline)
-                            .stroke(.blue, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
+                        MapPolyline(route)
                     }
                 }
                 .mapStyle(mapStyle)
