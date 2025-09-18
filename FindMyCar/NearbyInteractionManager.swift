@@ -109,21 +109,15 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
             session.delegate = self
             niSessions[deviceID] = session
 
-            do {
-                session.run(configuration)
-                logger.info("Restarted NI session for device \(deviceID)")
+            session.run(configuration)
+            logger.info("Restarted NI session for device \(deviceID)")
 
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                    isSessionActive = true
-                }
-                sessionStatus = .running
-                selectedDeviceID = deviceID
-                startDataMonitoring() // 데이터 모니터링 시작
-
-            } catch {
-                logger.error("Failed to restart NI session: \(error)")
-                sessionStatus = .failed(error)
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                isSessionActive = true
             }
+            sessionStatus = .running
+            selectedDeviceID = deviceID
+            startDataMonitoring() // 데이터 모니터링 시작
         }
 
         if configurations.isEmpty {

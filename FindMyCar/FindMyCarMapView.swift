@@ -14,6 +14,8 @@ struct FindMyCarMapView: View {
     @State private var scanTimer: Timer?
     @State private var mapStyle: MapStyle = .standard(elevation: .realistic)
     @State private var hasInitializedCamera = false
+    @State private var routeToVehicle: MKRoute?
+    @State private var showingRoute = false
     
     init() {
         let bluetoothManager = BluetoothManager()
@@ -26,11 +28,16 @@ struct FindMyCarMapView: View {
             MapReader { proxy in
                 Map(position: $cameraPosition) {
                     UserAnnotation()
-                    
+
                     ForEach(Array(deviceAnnotations.enumerated()), id: \.offset) { index, annotation in
                         Annotation(annotation.title, coordinate: annotation.coordinate, anchor: .bottom) {
                             CarAnnotationView(device: annotation.device, bluetoothManager: bluetoothManager)
                         }
+                    }
+
+                    if let route = routeToVehicle, showingRoute {
+                        MapPolyline(route.polyline)
+                            .stroke(.blue, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                     }
                 }
                 .mapStyle(mapStyle)
@@ -49,6 +56,17 @@ struct FindMyCarMapView: View {
                             span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
                         ))
                         hasInitializedCamera = true
+                    }
+
+                    // 경로 표시 알림 리스너 등록
+                    NotificationCenter.default.addObserver(
+                        forName: NSNotification.Name("ShowRouteToVehicle"),
+                        object: nil,
+                        queue: .main
+                    ) { notification in
+                        if let device = notification.object as? QorvoDevice {
+                            showRouteToVehicle(device)
+                        }
                     }
                 }
             }
@@ -69,6 +87,7 @@ struct FindMyCarMapView: View {
                     bluetoothManager: bluetoothManager,
                     nearbyInteractionManager: nearbyInteractionManager,
                     isScanning: $isScanning,
+                    showingRoute: $showingRoute,
                     startScanning: startScanning,
                     stopScanning: stopScanning,
                     onVehicleSelected: { device in
@@ -125,12 +144,74 @@ struct FindMyCarMapView: View {
         guard let savedLocation = LocationStorage.shared.getLastLocation(for: device.bleUniqueID) else {
             return
         }
-        
+
         withAnimation(.easeInOut(duration: 1.0)) {
             cameraPosition = .region(MKCoordinateRegion(
                 center: savedLocation,
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
             ))
+        }
+    }
+
+    private func showRouteToVehicle(_ device: QorvoDevice) {
+        // 이미 경로가 표시되어 있으면 숨기기
+        if showingRoute {
+            hideRoute()
+            return
+        }
+
+        guard let vehicleLocation = LocationStorage.shared.getLastLocation(for: device.bleUniqueID),
+              let userLocation = locationManager.userLocation else {
+            return
+        }
+
+        let sourcePlacemark = MKPlacemark(coordinate: userLocation)
+        let destinationPlacemark = MKPlacemark(coordinate: vehicleLocation)
+
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: sourcePlacemark)
+        request.destination = MKMapItem(placemark: destinationPlacemark)
+        request.transportType = .walking
+
+        let directions = MKDirections(request: request)
+
+        Task {
+            do {
+                let response = try await directions.calculate()
+
+                await MainActor.run {
+                    if let route = response.routes.first {
+                        routeToVehicle = route
+                        showingRoute = true
+
+                        // 경로를 포함하는 영역으로 지도 확대
+                        let rect = route.polyline.boundingMapRect
+                        let region = MKCoordinateRegion(rect)
+
+                        // 여백을 위해 span을 약간 늘림
+                        let expandedRegion = MKCoordinateRegion(
+                            center: region.center,
+                            span: MKCoordinateSpan(
+                                latitudeDelta: region.span.latitudeDelta * 1.3,
+                                longitudeDelta: region.span.longitudeDelta * 1.3
+                            )
+                        )
+
+                        withAnimation(.easeInOut(duration: 1.0)) {
+                            cameraPosition = .region(expandedRegion)
+                        }
+                    }
+                }
+            } catch {
+                print("경로 계산 실패: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func hideRoute() {
+        withAnimation(.easeInOut(duration: 0.5)) {
+            showingRoute = false
+            routeToVehicle = nil
         }
     }
 }
@@ -139,6 +220,7 @@ struct DeviceListSheetView: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
     @Binding var isScanning: Bool
+    @Binding var showingRoute: Bool
     let startScanning: () -> Void
     let stopScanning: () -> Void
     let onVehicleSelected: (QorvoDevice) -> Void
@@ -398,6 +480,7 @@ struct DeviceListSheetView: View {
                             bluetoothManager: bluetoothManager,
                             nearbyInteractionManager: nearbyInteractionManager,
                             isSaved: true,
+                            showingRoute: $showingRoute,
                             onVehicleSelected: onVehicleSelected
                         )
                     }
@@ -420,6 +503,7 @@ struct DeviceListSheetView: View {
                             bluetoothManager: bluetoothManager,
                             nearbyInteractionManager: nearbyInteractionManager,
                             isSaved: false,
+                            showingRoute: $showingRoute,
                             onVehicleSelected: onVehicleSelected
                         )
                     }
@@ -434,6 +518,7 @@ struct DeviceCard: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @ObservedObject var nearbyInteractionManager: NearbyInteractionManager
     let isSaved: Bool
+    @Binding var showingRoute: Bool
     let onVehicleSelected: (QorvoDevice) -> Void
     @State private var currentAddress: String = ""
     @State private var showButtons: Bool = false
@@ -519,28 +604,49 @@ struct DeviceCard: View {
             }
 
             if showButtons {
-                HStack(spacing: 8) {
-                    deviceActionButton
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                    
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        deviceActionButton
+                            .frame(maxWidth: .infinity, minHeight: 36)
+
+                        if isSaved {
+                            Text(showingRoute ? "경로 표시 해제" : "경로 표시")
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                                .background(.purple.opacity(0.1))
+                                .foregroundColor(.purple)
+                                .cornerRadius(24)
+                                .onTapGesture {
+                                    // MapView에서 경로 표시 기능 호출
+                                    NotificationCenter.default.post(
+                                        name: NSNotification.Name("ShowRouteToVehicle"),
+                                        object: device
+                                    )
+                                }
+                        }
+                    }
+
                     if isSaved {
-                        Text("차량 삭제")
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                            .background(.red.opacity(0.1))
-                            .foregroundColor(.red)
-                            .cornerRadius(24)
-                            .onTapGesture {
-                                bluetoothManager.removeSavedDevice(device.bleUniqueID)
-                            }
+                        HStack(spacing: 8) {
+                            Text("차량 삭제")
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                                .background(.red.opacity(0.1))
+                                .foregroundColor(.red)
+                                .cornerRadius(24)
+                                .onTapGesture {
+                                    bluetoothManager.removeSavedDevice(device.bleUniqueID)
+                                }
+                        }
                     } else if !isSaved && (device.blePeripheralStatus == statusConnected || device.blePeripheralStatus == statusRanging) {
-                        Text("차량 등록")
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                            .background(.blue.opacity(0.1))
-                            .foregroundColor(.blue)
-                            .cornerRadius(24)
-                            .onTapGesture {
-                                bluetoothManager.saveCurrentDevice(device)
-                            }
+                        HStack(spacing: 8) {
+                            Text("차량 등록")
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                                .background(.blue.opacity(0.1))
+                                .foregroundColor(.blue)
+                                .cornerRadius(24)
+                                .onTapGesture {
+                                    bluetoothManager.saveCurrentDevice(device)
+                                }
+                        }
                     }
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
