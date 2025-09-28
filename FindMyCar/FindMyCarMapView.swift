@@ -557,10 +557,21 @@ struct DeviceCard: View {
                         let addressText = currentAddress.isEmpty ? "위치 정보 없음" : currentAddress
                         let timeText = formatTimestamp(locationInfo.timestamp)
                         
-                        Text("\(addressText)・\(timeText)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
+                        HStack(spacing: 4) {
+                            Text(addressText)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                            
+                            Image(systemName: "circle.fill")
+                                .font(.system(size: 2.5))
+                                .foregroundColor(.secondary)
+                            
+                            Text(timeText)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .lineLimit(1)
                     }
                 }
                 
