@@ -883,7 +883,7 @@ struct DirectionIndicator: View {
 }
 
 enum MapStyleType: String, CaseIterable {
-    case standard = "표준"
+    case standard = "기본"
     case imagery = "위성"
     case hybrid = "하이브리드"
 
