@@ -13,6 +13,7 @@ import os.log
 import CoreBluetooth
 import CoreLocation
 import SwiftUI
+import AVFoundation
 
 class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDelegate {
     private let logger = Logger(subsystem: "com.findmycar.app", category: "NearbyInteractionManager")
@@ -140,10 +141,33 @@ class NearbyInteractionManager: NSObject, ObservableObject, BluetoothManagerDele
     
     private func setupAccessory(_ configData: Data, deviceID: Int) {
         logger.info("Setting up accessory with configuration data")
+
+        let cameraAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
         
+        if cameraAuthorizationStatus == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                guard let self = self else { return }
+                DispatchQueue.main.async {
+                    self.createAndRunSession(configData: configData, deviceID: deviceID, cameraEnabled: granted)
+                }
+            }
+        } else {
+            let cameraEnabled = (cameraAuthorizationStatus == .authorized)
+            createAndRunSession(configData: configData, deviceID: deviceID, cameraEnabled: cameraEnabled)
+        }
+    }
+    
+    private func createAndRunSession(configData: Data, deviceID: Int, cameraEnabled: Bool) {
         do {
             let configuration = try NINearbyAccessoryConfiguration(data: configData)
-            configuration.isCameraAssistanceEnabled = true
+            configuration.isCameraAssistanceEnabled = cameraEnabled
+            
+            if !cameraEnabled {
+                logger.warning("Camera assistance disabled due to lack of permission - Direction data may be unavailable on iPhone 15+")
+            } else {
+                logger.info("Camera assistance enabled for UWB session")
+            }
+            
             configurations[deviceID] = configuration
             
             // Create NISession for this device
