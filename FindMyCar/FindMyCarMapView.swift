@@ -47,6 +47,7 @@ struct FindMyCarMapView: View {
                             .stroke(.blue, style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round))
                     }
                 }
+                .frame(minWidth: 100, minHeight: 100)
                 .mapStyle(mapStyle)
                 .mapControls {
                     MapCompass()
@@ -822,11 +823,11 @@ struct CarAnnotationView: View {
             Circle()
                 .fill(statusColor.opacity(0.3))
                 .frame(width: 60, height: 60)
-            
+
             Circle()
                 .fill(statusColor)
                 .frame(width: 40, height: 40)
-            
+
             Image(systemName: "car.fill")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.white)
@@ -835,8 +836,13 @@ struct CarAnnotationView: View {
         .onAppear {
             updateStatus()
         }
-        .onReceive(bluetoothManager.$discoveredDevices) { _ in
-            updateStatus()
+        .onReceive(bluetoothManager.$discoveredDevices) { devices in
+            // Only update if this specific device's status changed
+            if let currentDevice = devices.first(where: { $0.bleUniqueID == device.bleUniqueID }),
+               let newStatus = currentDevice.blePeripheralStatus,
+               newStatus != currentStatus {
+                currentStatus = newStatus
+            }
         }
     }
 
@@ -846,22 +852,15 @@ struct CarAnnotationView: View {
         } else {
             currentStatus = device.blePeripheralStatus ?? ""
         }
-
-        print("Device \(device.blePeripheralName) updated status: \(currentStatus)")
     }
 
     private var statusColor: Color {
-        print("Device \(device.blePeripheralName) status: \(currentStatus)")
-
         switch currentStatus {
         case statusConnected:
-            print("Status: Connected -> Green")
             return .green
         case statusRanging:
-            print("Status: Ranging -> Blue")
             return .blue
         default:
-            print("Status: Default -> Gray")
             return .gray
         }
     }

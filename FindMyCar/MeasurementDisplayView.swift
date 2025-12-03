@@ -187,19 +187,20 @@ struct MeasurementCard: View {
 struct DirectionCompassView: View {
     let direction: simd_float3?
     @State private var previousAngle: Double = 0
-    
+    @State private var currentAngle: Double = 0
+
     var body: some View {
         VStack(spacing: 12) {
             Text("Direction Compass")
                 .font(.headline)
                 .foregroundColor(.secondary)
-            
+
             ZStack {
                 // Compass Background
                 Circle()
                     .stroke(Color(.systemGray4), lineWidth: 2)
                     .frame(width: 150, height: 150)
-                
+
                 // Direction Lines
                 ForEach(0..<8, id: \.self) { index in
                     Rectangle()
@@ -208,34 +209,34 @@ struct DirectionCompassView: View {
                         .offset(y: -65)
                         .rotationEffect(.degrees(Double(index) * 45))
                 }
-                
+
                 // Direction Labels
                 Text("N")
                     .font(.caption.weight(.bold))
                     .offset(y: -80)
-                
+
                 Text("E")
                     .font(.caption.weight(.bold))
                     .offset(x: 80)
-                
+
                 Text("S")
                     .font(.caption.weight(.bold))
                     .offset(y: 80)
-                
+
                 Text("W")
                     .font(.caption.weight(.bold))
                     .offset(x: -80)
-                
+
                 // Direction Indicator
-                if let direction = direction {
+                if direction != nil {
                     DirectionArrow()
                         .fill(Color.red)
                         .frame(width: 8, height: 40)
                         .offset(y: -35)
-                        .rotationEffect(.degrees(smoothAngleFromDirection(direction)))
-                        .animation(.easeInOut(duration: 0.3), value: smoothAngleFromDirection(direction))
+                        .rotationEffect(.degrees(currentAngle))
+                        .animation(.easeInOut(duration: 0.3), value: currentAngle)
                 }
-                
+
                 // Center Dot
                 Circle()
                     .fill(Color.primary)
@@ -245,19 +246,24 @@ struct DirectionCompassView: View {
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(16)
+        .onChange(of: direction) { oldValue, newValue in
+            if let newDirection = newValue {
+                updateAngle(for: newDirection)
+            }
+        }
     }
-    
-    private func smoothAngleFromDirection(_ direction: simd_float3) -> Double {
+
+    private func updateAngle(for direction: simd_float3) {
         let x = Double(direction.x)
         let z = Double(direction.z)
-        
+
         // Calculate angle from forward direction (negative z-axis)
         let rawAngle = atan2(x, -z) * 180 / Double.pi
         let normalizedAngle = rawAngle < 0 ? rawAngle + 360 : rawAngle
-        
+
         // Handle 0/360 degree boundary to prevent full rotation
         let angleDifference = normalizedAngle - previousAngle
-        
+
         var smoothedAngle: Double
         if abs(angleDifference) > 180 {
             // We're crossing the 0/360 boundary
@@ -265,18 +271,15 @@ struct DirectionCompassView: View {
                 // Going from ~360 to ~0, subtract 360 from new angle
                 smoothedAngle = normalizedAngle - 360
             } else {
-                // Going from ~0 to ~360, add 360 to new angle  
+                // Going from ~0 to ~360, add 360 to new angle
                 smoothedAngle = normalizedAngle + 360
             }
         } else {
             smoothedAngle = normalizedAngle
         }
-        
-        DispatchQueue.main.async {
-            self.previousAngle = smoothedAngle
-        }
-        
-        return smoothedAngle
+
+        previousAngle = smoothedAngle
+        currentAngle = smoothedAngle
     }
 }
 
